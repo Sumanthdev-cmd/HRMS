@@ -271,6 +271,7 @@ function escapeHtml(value) {
 
 async function sendEmail({ to, subject, text, html }) {
   if (!resendApiKey) {
+    console.warn('[email] RESEND_API_KEY is missing; email was not sent.')
     return { sent: false, error: 'RESEND_API_KEY is missing' }
   }
 
@@ -292,6 +293,7 @@ async function sendEmail({ to, subject, text, html }) {
   const result = await response.json().catch(() => ({}))
 
   if (!response.ok) {
+    console.warn(`[email] Resend rejected email to ${to}: ${response.status} ${JSON.stringify(result)}`)
     return { sent: false, error: result.message || result.error || 'Email provider rejected the message' }
   }
 
@@ -1854,6 +1856,15 @@ app.get('/api/auth/status', (_request, response) => {
     storageTable: 'hrms_app_state',
     moduleRecordsTable: 'hrms_module_records',
     analyticsTable: 'hrms_analytics_records',
+  })
+})
+
+app.get('/api/email/status', (_request, response) => {
+  response.json({
+    resendApiKeyConfigured: Boolean(resendApiKey),
+    emailFromConfigured: Boolean(emailFrom),
+    emailFrom,
+    publicAppUrl,
   })
 })
 
