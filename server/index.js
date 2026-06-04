@@ -29,6 +29,7 @@ const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const resendApiKey = process.env.RESEND_API_KEY
+const brevoApiKey = process.env.BREVO_API_KEY
 const smtpHost = process.env.SMTP_HOST
 const smtpPort = Number(process.env.SMTP_PORT || 465)
 const smtpUser = process.env.SMTP_USER
@@ -297,6 +298,39 @@ function getSmtpTransporter() {
 }
 
 async function sendEmail({ to, subject, text, html }) {
+  if (brevoApiKey) {
+    const fromMatch = String(emailFrom).match(/^(.*)<(.+)>$/)
+    const senderName = fromMatch ? fromMatch[1].trim() : 'AI-HRMS'
+    const senderEmail = fromMatch ? fromMatch[2].trim() : smtpUser || 'no-reply@example.com'
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoApiKey,
+      },
+      body: JSON.stringify({
+        sender: {
+          name: senderName || 'AI-HRMS',
+          email: senderEmail,
+        },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html,
+      }),
+    })
+
+    const result = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      console.warn(`[email] Brevo rejected email to ${to}: ${response.status} ${JSON.stringify(result)}`)
+      return { sent: false, error: result.message || 'Brevo rejected the message' }
+    }
+
+    return { sent: true, providerId: result.messageId || null, provider: 'brevo' }
+  }
+
   const transporter = getSmtpTransporter()
 
   if (transporter) {
@@ -1907,6 +1941,7 @@ app.get('/api/auth/status', (_request, response) => {
 
 app.get('/api/email/status', (_request, response) => {
   response.json({
+    brevoApiKeyConfigured: Boolean(brevoApiKey),
     smtpConfigured: Boolean(smtpHost && smtpUser && smtpPass),
     smtpHostConfigured: Boolean(smtpHost),
     smtpUserConfigured: Boolean(smtpUser),

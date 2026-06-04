@@ -64,6 +64,15 @@ SUPABASE_URL
 SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 PUBLIC_APP_URL
+BREVO_API_KEY
+EMAIL_FROM=AI-HRMS <your-verified-sender@gmail.com>
+```
+
+Brevo is the recommended hosted email provider on Render because it sends through HTTPS instead of blocked SMTP ports. Verify the sender email in Brevo before sending candidate emails.
+
+Optional Gmail SMTP settings for local development or hosts that allow SMTP:
+
+```text
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_USER=your-gmail-address@gmail.com
@@ -71,6 +80,6 @@ SMTP_PASS=your-gmail-app-password
 EMAIL_FROM=AI-HRMS <your-gmail-address@gmail.com>
 ```
 
-`RESEND_API_KEY` is optional if you later verify a sending domain in Resend. Gmail SMTP is the recommended quick setup when you want candidate notifications to come from a fixed Gmail account.
+`RESEND_API_KEY` is optional if you later verify a sending domain in Resend.
 
 GitHub Pages is only suitable for static frontend files. This app needs the Express backend for Supabase service-role sync, realtime updates, resume parsing, and candidate emails, so deploy it as a Node service.
