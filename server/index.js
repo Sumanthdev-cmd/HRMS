@@ -10,6 +10,7 @@ import cors from 'cors'
 import express from 'express'
 import mammoth from 'mammoth'
 import multer from 'multer'
+import nodemailer from 'nodemailer'
 import { PDFParse } from 'pdf-parse'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -28,6 +29,10 @@ const supabaseAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const resendApiKey = process.env.RESEND_API_KEY
+const smtpHost = process.env.SMTP_HOST
+const smtpPort = Number(process.env.SMTP_PORT || 465)
+const smtpUser = process.env.SMTP_USER
+const smtpPass = process.env.SMTP_PASS
 const emailFrom = process.env.EMAIL_FROM || 'AI-HRMS <onboarding@resend.dev>'
 const publicAppUrl = process.env.PUBLIC_APP_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5173'
 const supabaseAuth = supabaseUrl && supabaseAnonKey
@@ -269,10 +274,51 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+let smtpTransporter = null
+
+function getSmtpTransporter() {
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    return null
+  }
+
+  if (!smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    })
+  }
+
+  return smtpTransporter
+}
+
 async function sendEmail({ to, subject, text, html }) {
+  const transporter = getSmtpTransporter()
+
+  if (transporter) {
+    try {
+      const result = await transporter.sendMail({
+        from: emailFrom,
+        to,
+        subject,
+        text,
+        html,
+      })
+
+      return { sent: true, providerId: result.messageId || null, provider: 'smtp' }
+    } catch (error) {
+      console.warn(`[email] SMTP rejected email to ${to}: ${error.message}`)
+      return { sent: false, error: error.message }
+    }
+  }
+
   if (!resendApiKey) {
-    console.warn('[email] RESEND_API_KEY is missing; email was not sent.')
-    return { sent: false, error: 'RESEND_API_KEY is missing' }
+    console.warn('[email] SMTP is not configured and RESEND_API_KEY is missing; email was not sent.')
+    return { sent: false, error: 'SMTP email settings or RESEND_API_KEY are required' }
   }
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -1861,6 +1907,11 @@ app.get('/api/auth/status', (_request, response) => {
 
 app.get('/api/email/status', (_request, response) => {
   response.json({
+    smtpConfigured: Boolean(smtpHost && smtpUser && smtpPass),
+    smtpHostConfigured: Boolean(smtpHost),
+    smtpUserConfigured: Boolean(smtpUser),
+    smtpPassConfigured: Boolean(smtpPass),
+    smtpUser: smtpUser || null,
     resendApiKeyConfigured: Boolean(resendApiKey),
     emailFromConfigured: Boolean(emailFrom),
     emailFrom,

@@ -63,9 +63,14 @@ Required environment variables:
 SUPABASE_URL
 SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
-RESEND_API_KEY
-EMAIL_FROM
 PUBLIC_APP_URL
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=your-gmail-address@gmail.com
+SMTP_PASS=your-gmail-app-password
+EMAIL_FROM=AI-HRMS <your-gmail-address@gmail.com>
 ```
+
+`RESEND_API_KEY` is optional if you later verify a sending domain in Resend. Gmail SMTP is the recommended quick setup when you want candidate notifications to come from a fixed Gmail account.
 
 GitHub Pages is only suitable for static frontend files. This app needs the Express backend for Supabase service-role sync, realtime updates, resume parsing, and candidate emails, so deploy it as a Node service.
