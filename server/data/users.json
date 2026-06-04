@@ -1,0 +1,30 @@
+[
+  {
+    "email": "admin@aihrms.local",
+    "name": "Meera Iyer",
+    "role": "admin",
+    "salt": "289f3c33a5fb64724b4c14b7e7a4d941",
+    "passwordHash": "7754b7f64383d9000009525fc0f32fda9a865bbdda9e149a86e1a0a3449950cc522eb4743c6bfd22722325ab7279558e87c8a46aac389aa47a1f3a17262d46e0"
+  },
+  {
+    "email": "manager@aihrms.local",
+    "name": "Nisha Rao",
+    "role": "manager",
+    "salt": "59104bef024904f6a8b5d99bafd98f79",
+    "passwordHash": "9e456f460422ce614086893b317e6e06a43389181ad0f3e236a301c992009eead2251f31cef0a3ac1d20bc44fe562796f3e703a93c9dcb4740e83306071af2c0"
+  },
+  {
+    "email": "recruiter@aihrms.local",
+    "name": "Rohan Shah",
+    "role": "recruiter",
+    "salt": "1a2efc337a36991cfba1319b4f083d57",
+    "passwordHash": "75f503c965c8b6c95fb58d783411bd7b8ad05b22b7b93c0afc4b7eeda3de99d9861c3fe30c7b6f83c92e513bf7e04e140b64a41ca814836d13565021221b44c1"
+  },
+  {
+    "email": "employee@aihrms.local",
+    "name": "Aarav Mehta",
+    "role": "employee",
+    "salt": "b6f9125edfa65d1fd58cafb7b145e5a2",
+    "passwordHash": "b9c6519abf4d0c80238ebfa089911e94d27faecee8ee36cc80b44b114c05f37f4bd737602695628887d160c77a6a874ef4db11ca867e5cda6b45468e8f8c72a6"
+  }
+]

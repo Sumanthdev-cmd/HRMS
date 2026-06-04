@@ -1,0 +1,21 @@
+category,record_key,sort_order,day,month,present,late,score,productivity,payroll,scope_type,scope_name,severity,owner,title,signal,attention_point,recommended_action
+attendance,mon,1,Mon,,238,9,,,,,,,,,,
+attendance,tue,2,Tue,,244,7,,,,,,,,,,
+attendance,wed,3,Wed,,231,18,,,,,,,,,,
+attendance,thu,4,Thu,,242,6,,,,,,,,,,
+attendance,fri,5,Fri,,226,21,,,,,,,,,,
+performance,jan,1,,Jan,,,78,72,,,,,,,,
+performance,feb,2,,Feb,,,80,74,,,,,,,,
+performance,mar,3,,Mar,,,83,79,,,,,,,,
+performance,apr,4,,Apr,,,81,76,,,,,,,,
+performance,may,5,,May,,,86,82,,,,,,,,
+performance,jun,6,,Jun,,,89,85,,,,,,,,
+payroll,jan,1,,Jan,,,,,42.2,,,,,,,
+payroll,feb,2,,Feb,,,,,43.1,,,,,,,
+payroll,mar,3,,Mar,,,,,44.6,,,,,,,
+payroll,apr,4,,Apr,,,,,46.3,,,,,,,
+payroll,may,5,,May,,,,,47.9,,,,,,,
+payroll,jun,6,,Jun,,,,,49.4,,,,,,,
+insights,insight-attendance-revenue,1,,,,,,,,Team,Revenue Operations,High attention,Priya Nair,Wednesday and Friday late arrivals are clustering,"8 late logins were recorded across the last two tracked weeks, mostly between 9:45 AM and 10:10 AM.",Standup attendance and client handoff coverage may be affected for this team.,Review commute flexibility and assign a backup owner for the first hour on Wednesdays and Fridays.
+insights,insight-performance-aarav,2,,,,,,,,Person,Aarav Mehta,Watch,Neha Kapoor,Attendance dipped while performance stayed stable,"Attendance is 96% with one late login, while performance remains at 87.",No performance issue is detected but the attendance pattern should be checked before it repeats.,Manager should have a short check-in and confirm if leave planning or schedule support is needed.
+insights,insight-product-analytics,3,,,,,,,,Teams,Product and Analytics,Positive trend,Management Admin,Sprint planning changes improved productivity,Productivity trend improved by 9 points after planning changes.,The same planning rhythm may help teams with lower review completion.,Document the planning routine and pilot it with one more department next cycle.
