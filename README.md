@@ -33,10 +33,10 @@ Vite proxies `/api/*` to the backend.
 Use any of these accounts on the login screen:
 
 ```text
-admin@aihrms.local / admin123
-manager@aihrms.local / manager123
-recruiter@aihrms.local / recruiter123
-employee@aihrms.local / employee123
+admin@yourcompany.com / admin123
+manager@yourcompany.com / manager123
+recruiter@yourcompany.com / recruiter123
+employee@yourcompany.com / employee123
 ```
 
 ## Verify
