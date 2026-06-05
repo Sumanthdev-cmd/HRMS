@@ -805,7 +805,17 @@ function mergeWithDefaultState(data) {
 }
 
 function normalizeEmployeeManagerProfiles() {
-  state.employees = (state.employees || []).map((employee) => {
+  const seenEmployees = new Set()
+  state.employees = (state.employees || []).filter((employee) => {
+    const key = String(employee.employeeCode || employee.workEmail || employee.id || employee.name || '').toLowerCase()
+
+    if (!key || seenEmployees.has(key)) {
+      return false
+    }
+
+    seenEmployees.add(key)
+    return true
+  }).map((employee) => {
     const managerProfile = findManagerProfile({
       name: employee.manager,
       email: employee.managerEmail,
@@ -2534,6 +2544,17 @@ app.post('/api/employees', async (request, response) => {
     loginAccess,
     selectedManagerProfile,
   )
+
+  const duplicateEmployee = state.employees.find((item) =>
+    item.employeeCode === employee.employeeCode ||
+    String(item.workEmail || '').toLowerCase() === String(employee.workEmail || '').toLowerCase(),
+  )
+
+  if (duplicateEmployee) {
+    response.status(409).json({ error: `${employee.name} already exists in Employee directory` })
+    return
+  }
+
   state.employees.unshift(employee)
   await syncEmployeeToSupabase(employee)
   state.notifications.unshift({
