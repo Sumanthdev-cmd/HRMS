@@ -398,6 +398,19 @@ async function sendEmail({ to, subject, text, html }) {
   return { sent: true, providerId: result.id || null }
 }
 
+function formatAppDateTime(value = new Date(), options = {}) {
+  return new Date(value).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+    ...options,
+  })
+}
+
 function candidateNotificationContent(shortlist) {
   const role = shortlist.bestRole || shortlist.jobTitle || 'the open role'
   const score = Number(shortlist.score || 0)
@@ -532,7 +545,7 @@ function createScreeningEvaluation(shortlist, session) {
     hrRecommendationNote: overallScore >= 70
       ? 'AI suggests moving to structured HR/technical interview. Final decision remains with HR.'
       : 'AI suggests HR follow-up before moving ahead. Final decision remains with HR.',
-    generatedAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+    generatedAt: formatAppDateTime(),
   }
 }
 
@@ -553,7 +566,7 @@ function ensureScreeningSession(shortlist, actorName = 'HR Recruiter') {
     inviteToken,
     inviteUrl: `${publicAppUrl}/candidate-screening/${shortlist.id}?token=${inviteToken}`,
     createdBy: actorName,
-    createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+    createdAt: formatAppDateTime(),
     questions,
     currentQuestionIndex: 0,
     messages: [
@@ -562,7 +575,7 @@ function ensureScreeningSession(shortlist, actorName = 'HR Recruiter') {
         sender: 'ai',
         mode: 'text',
         text: questions[0],
-        createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+        createdAt: formatAppDateTime(),
       },
     ],
     voiceTranscripts: [],
@@ -2611,7 +2624,7 @@ app.patch('/api/employees/:id/review', async (request, response) => {
     return
   }
 
-  const reviewedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  const reviewedAt = formatAppDateTime()
   const review = {
     id: `review-${Date.now()}`,
     score,
@@ -2771,7 +2784,7 @@ app.post('/api/teams', (request, response) => {
         id: `msg-${Date.now()}`,
         author: actorName,
         text: `${actorName} created this team group.`,
-        createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+        createdAt: formatAppDateTime(),
       },
     ],
   }
@@ -2836,7 +2849,7 @@ app.post('/api/teams/:id/messages', upload.single('attachment'), (request, respo
     id: `msg-${Date.now()}`,
     author: actorName,
     text: text || `${actorName} shared ${attachment.name}.`,
-    createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+    createdAt: formatAppDateTime(),
     attachment,
   }
   team.messages.push(message)
@@ -3146,7 +3159,7 @@ app.post('/api/recruitment/shortlist/:id/notify', async (request, response) => {
   }
 
   shortlist.notified = true
-  shortlist.notifiedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  shortlist.notifiedAt = formatAppDateTime()
   shortlist.status = 'Candidate notified'
   shortlist.emailMessage = `Interview update sent to ${shortlist.email} for ${shortlist.jobTitle}.`
   shortlist.emailProviderId = emailResult.providerId
@@ -3162,7 +3175,7 @@ app.post('/api/recruitment/shortlist/:id/notify', async (request, response) => {
 
 app.post('/api/recruitment/shortlist/notify-all', async (_request, response) => {
   const pending = state.shortlists.filter((item) => !item.notified)
-  const notifiedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  const notifiedAt = formatAppDateTime()
   const failures = []
 
   for (const shortlist of pending) {
@@ -3224,16 +3237,12 @@ app.post('/api/recruitment/shortlist/:id/video-interview', async (request, respo
     `https://meet.google.com/aihrms-${shortlist.id.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase()}`
   const interview = {
     scheduledFor,
-    scheduledForLabel: scheduledDate.toLocaleString('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      hour12: true,
-    }),
+    scheduledForLabel: formatAppDateTime(scheduledDate),
     interviewer: String(request.body.interviewer || actorName).trim(),
     meetingLink,
     notes: String(request.body.notes || '').trim(),
     scheduledBy: actorName,
-    scheduledAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+    scheduledAt: formatAppDateTime(),
   }
 
   const emailResult = await sendEmail({
@@ -3294,7 +3303,7 @@ app.post('/api/recruitment/shortlist/:id/screening/start', async (request, respo
 
   shortlist.status = shortlist.selected ? shortlist.status : 'AI screening in progress'
   shortlist.aiScreening.invited = true
-  shortlist.aiScreening.invitedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  shortlist.aiScreening.invitedAt = formatAppDateTime()
   shortlist.aiScreening.emailProviderId = emailResult.providerId
   await syncShortlistedCandidateToSupabase(shortlist)
   state.notifications.unshift({
@@ -3328,7 +3337,7 @@ app.post('/api/recruitment/shortlist/:id/screening/message', async (request, res
   }
 
   const screening = ensureScreeningSession(shortlist, request.body.actorName || 'HR Recruiter')
-  const createdAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  const createdAt = formatAppDateTime()
   screening.messages.push({
     id: `screen-msg-${Date.now()}-candidate`,
     sender: 'candidate',
@@ -3400,7 +3409,7 @@ app.post('/api/public/screening/:id/message', async (request, response) => {
     return
   }
 
-  const createdAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  const createdAt = formatAppDateTime()
   screening.messages.push({
     id: `screen-msg-${Date.now()}-candidate`,
     sender: 'candidate',
@@ -3461,7 +3470,7 @@ app.patch('/api/recruitment/shortlist/:id/selection', async (request, response) 
   shortlist.status = 'Selected by HR'
   shortlist.selected = true
   shortlist.selectedBy = actorName
-  shortlist.selectedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  shortlist.selectedAt = formatAppDateTime()
   shortlist.selectionNote = `Final selection marked by ${actorName}. AI score was advisory only.`
   await syncShortlistedCandidateToSupabase(shortlist)
 
