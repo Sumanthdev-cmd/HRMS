@@ -640,6 +640,12 @@ h3 {
   gap: 16px;
 }
 
+.people-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
 .metric-strip,
 .metric-list {
   display: grid;
@@ -999,6 +1005,18 @@ th {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.department-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid #e5ecef;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
 .employee-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1100,6 +1118,13 @@ th {
   cursor: pointer;
 }
 
+.department-strip .department-filter {
+  width: auto;
+  min-width: 142px;
+  margin-bottom: 0;
+  padding: 0 14px;
+}
+
 .department-filter.active,
 .department-tile.active {
   border-color: #146c94;
@@ -1120,6 +1145,16 @@ th {
   cursor: pointer;
 }
 
+.department-strip .department-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  min-height: 38px;
+  padding: 0 12px;
+  text-align: left;
+}
+
 .department-tile:hover,
 .department-filter:hover {
   border-color: #146c94;
@@ -1135,9 +1170,19 @@ th {
   margin-top: 8px;
 }
 
+.department-strip .department-tile strong,
+.department-strip .department-tile span {
+  display: inline;
+  margin-top: 0;
+}
+
 .department-tile span {
   color: #667985;
   font-size: 13px;
+}
+
+.department-strip .department-tile span {
+  font-weight: 700;
 }
 
 .request-row {

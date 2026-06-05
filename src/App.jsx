@@ -1450,8 +1450,8 @@ function People({
   }
 
   return (
-    <section className="content-grid">
-      <Panel className="wide" title="Employee directory">
+    <section className="people-layout">
+      <Panel title="Employee directory">
         {canAddEmployee && (
           <form className="employee-form" onSubmit={submitEmployee}>
             <input
@@ -1549,6 +1549,27 @@ function People({
             <button type="submit">Add employee</button>
           </form>
         )}
+        <div className="department-strip" aria-label="Department filters">
+          <button
+            className={activeDepartment === 'All' ? 'department-filter active' : 'department-filter'}
+            type="button"
+            onClick={() => onDepartmentSelect('All')}
+          >
+            All departments
+          </button>
+          {departments.map((department) => (
+            <button
+              className={activeDepartment === department.name ? 'department-tile active' : 'department-tile'}
+              key={department.name}
+              type="button"
+              onClick={() => onDepartmentSelect(department.name)}
+            >
+              <UsersRound size={18} />
+              <strong>{department.name}</strong>
+              <span>{department.count} employees</span>
+            </button>
+          ))}
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -1649,30 +1670,6 @@ function People({
               ))}
             </tbody>
           </table>
-        </div>
-      </Panel>
-
-      <Panel title="Departments">
-        <button
-          className={activeDepartment === 'All' ? 'department-filter active' : 'department-filter'}
-          type="button"
-          onClick={() => onDepartmentSelect('All')}
-        >
-          All departments
-        </button>
-        <div className="department-grid">
-          {departments.map((department) => (
-            <button
-              className={activeDepartment === department.name ? 'department-tile active' : 'department-tile'}
-              key={department.name}
-              type="button"
-              onClick={() => onDepartmentSelect(department.name)}
-            >
-              <UsersRound size={18} />
-              <strong>{department.name}</strong>
-              <span>{department.count} employees</span>
-            </button>
-          ))}
         </div>
       </Panel>
 
