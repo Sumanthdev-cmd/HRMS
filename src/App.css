@@ -946,6 +946,55 @@ table {
   min-width: 1120px;
 }
 
+.employee-directory-table table {
+  table-layout: fixed;
+  min-width: 1080px;
+}
+
+.employee-directory-table.has-review-column table {
+  min-width: 1360px;
+}
+
+.employee-directory-table th:nth-child(1),
+.employee-directory-table td:nth-child(1) {
+  width: 190px;
+}
+
+.employee-directory-table th:nth-child(2),
+.employee-directory-table td:nth-child(2) {
+  width: 110px;
+}
+
+.employee-directory-table th:nth-child(3),
+.employee-directory-table td:nth-child(3) {
+  width: 140px;
+}
+
+.employee-directory-table th:nth-child(4),
+.employee-directory-table td:nth-child(4) {
+  width: 210px;
+}
+
+.employee-directory-table th:nth-child(5),
+.employee-directory-table td:nth-child(5) {
+  width: 105px;
+}
+
+.employee-directory-table th:nth-child(6),
+.employee-directory-table td:nth-child(6) {
+  width: 160px;
+}
+
+.employee-directory-table th:nth-child(7),
+.employee-directory-table td:nth-child(7) {
+  width: 100px;
+}
+
+.employee-directory-table th:nth-child(8),
+.employee-directory-table td:nth-child(8) {
+  width: 340px;
+}
+
 th,
 td {
   padding: 12px 10px;
@@ -963,6 +1012,28 @@ th {
 
 .person-cell {
   gap: 10px;
+}
+
+.employee-directory-table .person-cell {
+  min-width: 0;
+}
+
+.employee-directory-table .person-cell > div:last-child,
+.employee-directory-table .salary-structure,
+.employee-directory-table .performance-detail {
+  min-width: 0;
+}
+
+.employee-directory-table .person-cell strong,
+.employee-directory-table .person-cell span,
+.employee-directory-table .salary-structure strong,
+.employee-directory-table .salary-structure span,
+.employee-directory-table .salary-structure small,
+.employee-directory-table .performance-detail span,
+.employee-directory-table .performance-detail small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .avatar {

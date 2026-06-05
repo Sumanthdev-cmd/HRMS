@@ -1573,7 +1573,7 @@ function People({
             </button>
           ))}
         </div>
-        <div className="table-wrap">
+        <div className={`table-wrap employee-directory-table ${canReviewEmployees ? 'has-review-column' : ''}`}>
           <table>
             <thead>
               <tr>
