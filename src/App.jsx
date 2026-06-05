@@ -1593,13 +1593,15 @@ function People({
                   <td>
                     <div className="person-cell">
                       <div className="avatar">{employee.name.slice(0, 1)}</div>
-                      <div>
+                      <div className="person-meta">
                         <strong>{employee.name}</strong>
-                        <small className="employee-id-tag">Employee ID {employee.employeeCode || employee.id}</small>
-                        {employee.loginAccess?.enabled && (
-                          <small className="employee-id-tag">Login {employee.loginAccess.role}</small>
-                        )}
                         <span>{employee.role}</span>
+                        <div className="employee-badge-row">
+                          <small className="employee-id-tag">Employee ID {employee.employeeCode || employee.id}</small>
+                          {employee.loginAccess?.enabled && (
+                            <small className="employee-id-tag">Login {employee.loginAccess.role}</small>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
