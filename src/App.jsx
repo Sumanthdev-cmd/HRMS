@@ -1296,6 +1296,7 @@ function People({
   })
   const [reviewForms, setReviewForms] = useState({})
   const canReviewEmployees = role === 'manager' || role === 'admin'
+  const managerHasExactReports = allEmployees.some((employee) => employee.manager === currentUser.name)
 
   function submitEmployee(event) {
     event.preventDefault()
@@ -1354,6 +1355,18 @@ function People({
         },
       }))
     }, `Performance review submitted for ${employee.name}.`)
+  }
+
+  function canReviewEmployee(employee) {
+    if (role === 'admin') {
+      return true
+    }
+
+    if (role !== 'manager') {
+      return false
+    }
+
+    return employee.manager === currentUser.name || !managerHasExactReports
   }
 
   return (
@@ -1490,7 +1503,7 @@ function People({
                   </td>
                   {canReviewEmployees && (
                     <td>
-                      {role === 'admin' || employee.manager === currentUser.name ? (
+                      {canReviewEmployee(employee) ? (
                         <form className="review-form" onSubmit={(event) => submitReview(event, employee)}>
                           <input
                             type="number"

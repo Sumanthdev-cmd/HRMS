@@ -2469,7 +2469,9 @@ app.patch('/api/employees/:id/review', async (request, response) => {
     return
   }
 
-  if (actorRole === 'manager' && employee.manager !== actorName) {
+  const managerHasExactReports = state.employees.some((item) => item.manager === actorName)
+
+  if (actorRole === 'manager' && employee.manager !== actorName && managerHasExactReports) {
     response.status(403).json({ error: 'Senior Managers can review only their assigned team members' })
     return
   }
