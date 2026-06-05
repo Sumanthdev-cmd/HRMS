@@ -751,6 +751,16 @@ h3 {
   font-size: 13px;
 }
 
+.chart-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: #667985;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .chart-wrap {
   height: 270px;
 }

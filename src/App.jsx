@@ -770,7 +770,6 @@ function App() {
         {safeActiveTab === 'dashboard' && (
           <Dashboard
             data={data}
-            role={activeRole.label}
             roleId={role}
             onExport={actions.exportDashboard}
             onPostAnnouncement={actions.postAnnouncement}
@@ -1125,7 +1124,7 @@ function filterItems(items, term, keys) {
   )
 }
 
-function Dashboard({ data, role, roleId, onExport, onPostAnnouncement, onDeleteAnnouncement, runAction, currentUser, onNavigate }) {
+function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnouncement, runAction, currentUser, onNavigate }) {
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     text: '',
@@ -1154,7 +1153,11 @@ function Dashboard({ data, role, roleId, onExport, onPostAnnouncement, onDeleteA
         ))}
       </div>
 
-      <Panel className="wide" title={`${role} overview`} action="Export" onAction={onExport}>
+      <Panel className="wide" title="Company performance analytics" action="Export" onAction={onExport}>
+        <div className="chart-note">
+          <span>Blue: company score trend</span>
+          <span>Orange: productivity trend</span>
+        </div>
         <div className="chart-wrap">
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={data.performance}>

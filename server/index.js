@@ -1828,16 +1828,22 @@ function dashboardMetrics() {
   const attendanceAverage = Math.round(
     state.employees.reduce((sum, employee) => sum + employee.attendance, 0) / employeeCount,
   )
-  const performanceAverage = Math.round(
-    state.employees.reduce((sum, employee) => sum + employee.performance, 0) / employeeCount,
-  )
+  const reviewedEmployees = state.employees.filter((employee) => Number(employee.performance || 0) > 0)
+  const performanceAverage = reviewedEmployees.length
+    ? Math.round(reviewedEmployees.reduce((sum, employee) => sum + employee.performance, 0) / reviewedEmployees.length)
+    : 0
   const monthlyPayroll = state.employees.reduce((sum, employee) => sum + employee.salaryDetails.monthlyGross, 0)
 
   return [
     { id: 'employees', label: 'Employees', value: String(employeeCount), detail: '+12 this quarter' },
     { id: 'attendance', label: 'Attendance', value: `${attendanceAverage}%`, detail: 'Live company average' },
     { id: 'payroll', label: 'Monthly payroll', value: formatMoney(monthlyPayroll), detail: 'Ready for approval' },
-    { id: 'performance', label: 'Performance', value: String(performanceAverage), detail: 'Company average score' },
+    {
+      id: 'performance',
+      label: 'Performance',
+      value: reviewedEmployees.length ? String(performanceAverage) : 'No reviews',
+      detail: reviewedEmployees.length ? 'Reviewed employees only' : 'No review records yet',
+    },
   ]
 }
 
