@@ -310,6 +310,7 @@ function App() {
         body: JSON.stringify({
           ...review,
           actorName: auth.user.name,
+          actorEmail: auth.user.email,
           actorRole: role,
         }),
       })
@@ -775,12 +776,15 @@ function App() {
             onPostAnnouncement={actions.postAnnouncement}
             onDeleteAnnouncement={actions.deleteAnnouncement}
             runAction={runAction}
+            currentUser={auth.user}
+            onNavigate={setActiveTab}
           />
         )}
         {safeActiveTab === 'people' && (
           <People
             employees={filteredEmployees}
             allEmployees={data.employees}
+            managerProfiles={data.managerProfiles || []}
             documents={data.documents}
             onAdd={actions.addEmployee}
             actions={actions}
@@ -1121,7 +1125,7 @@ function filterItems(items, term, keys) {
   )
 }
 
-function Dashboard({ data, role, roleId, onExport, onPostAnnouncement, onDeleteAnnouncement, runAction }) {
+function Dashboard({ data, role, roleId, onExport, onPostAnnouncement, onDeleteAnnouncement, runAction, currentUser, onNavigate }) {
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     text: '',
@@ -1219,7 +1223,72 @@ function Dashboard({ data, role, roleId, onExport, onPostAnnouncement, onDeleteA
           <InsightCard insight={insight} index={index} key={insight.id || insight.title || insight} />
         ))}
       </Panel>
+
+      {roleId === 'manager' && (
+        <ManagerTasks data={data} currentUser={currentUser} onNavigate={onNavigate} />
+      )}
     </section>
+  )
+}
+
+function managerTeamEmployees(employees, currentUser) {
+  const exactTeam = employees.filter((employee) =>
+    employee.manager === currentUser.name ||
+    employee.managerEmail === currentUser.email,
+  )
+
+  return exactTeam.length ? exactTeam : employees
+}
+
+function ManagerTasks({ data, currentUser, onNavigate }) {
+  const team = managerTeamEmployees(data.employees, currentUser)
+  const teamNames = new Set(team.map((employee) => employee.name))
+  const pendingLeaves = data.leaveRequests.filter((request) =>
+    request.status === 'Pending' && teamNames.has(request.person),
+  )
+  const reviewsDue = team.filter((employee) =>
+    !employee.performance ||
+    employee.performanceDetails?.rating === 'Not reviewed' ||
+    employee.performanceDetails?.reviewCycle === 'First review pending',
+  )
+  const attendanceWatch = team.filter((employee) => Number(employee.attendance || 0) < 90)
+  const teamAveragePerformance = team.length
+    ? Math.round(team.reduce((sum, employee) => sum + Number(employee.performance || 0), 0) / team.length)
+    : 0
+
+  return (
+    <Panel className="wide" title="Manager tasks">
+      <div className="manager-task-grid">
+        <Metric icon={UsersRound} label="My team" value={String(team.length)} detail="Employees assigned to this manager" />
+        <Metric icon={ClipboardCheck} label="Pending leave" value={String(pendingLeaves.length)} detail="Requests waiting for action" />
+        <Metric icon={Gauge} label="Reviews due" value={String(reviewsDue.length)} detail="Performance reviews to submit" />
+        <Metric icon={CalendarCheck} label="Attendance watch" value={String(attendanceWatch.length)} detail="Team members below 90%" />
+      </div>
+      <div className="manager-task-actions">
+        <button type="button" onClick={() => onNavigate('leave')}>Approve leave</button>
+        <button type="button" onClick={() => onNavigate('people')}>Review employees</button>
+        <button type="button" onClick={() => onNavigate('attendance')}>Check attendance</button>
+        <button type="button" onClick={() => onNavigate('teamup')}>Message team</button>
+      </div>
+      <div className="manager-task-list">
+        <InfoRow
+          title="Team performance"
+          text={`Average score ${teamAveragePerformance}. ${reviewsDue.length} review${reviewsDue.length === 1 ? '' : 's'} need manager input.`}
+        />
+        <InfoRow
+          title="Immediate approvals"
+          text={pendingLeaves.length
+            ? `${pendingLeaves.map((request) => `${request.person} - ${request.type}`).join(', ')}`
+            : 'No team leave requests are pending.'}
+        />
+        <InfoRow
+          title="Attention required"
+          text={attendanceWatch.length
+            ? `${attendanceWatch.map((employee) => `${employee.name} attendance ${employee.attendance}%`).join(', ')}`
+            : 'No attendance risk under this manager right now.'}
+        />
+      </div>
+    </Panel>
   )
 }
 
@@ -1265,6 +1334,7 @@ function InsightCard({ insight, index }) {
 function People({
   employees,
   allEmployees,
+  managerProfiles,
   documents,
   onAdd,
   actions,
@@ -1281,6 +1351,8 @@ function People({
     role: '',
     department: 'HR',
     manager: '',
+    managerEmail: '',
+    managerProfileId: '',
     ctc: '',
     cabChargesMonthly: '',
     createLogin: true,
@@ -1288,7 +1360,10 @@ function People({
     temporaryPassword: '',
   })
   const departments = departmentCounts(allEmployees)
-  const managerOptions = allEmployees.map((employee) => employee.name)
+  const managerOptions = managerProfiles.length
+    ? managerProfiles
+    : Array.from(new Set(allEmployees.map((employee) => employee.manager).filter(Boolean)))
+      .map((name) => ({ name, email: '', id: '' }))
   const [documentForm, setDocumentForm] = useState({
     title: '',
     category: 'Policy',
@@ -1296,7 +1371,10 @@ function People({
   })
   const [reviewForms, setReviewForms] = useState({})
   const canReviewEmployees = role === 'manager' || role === 'admin'
-  const managerHasExactReports = allEmployees.some((employee) => employee.manager === currentUser.name)
+  const managerHasExactReports = allEmployees.some((employee) =>
+    employee.manager === currentUser.name ||
+    employee.managerEmail === currentUser.email,
+  )
 
   function submitEmployee(event) {
     event.preventDefault()
@@ -1308,6 +1386,8 @@ function People({
         role: '',
         department: 'HR',
         manager: '',
+        managerEmail: '',
+        managerProfileId: '',
         ctc: '',
         cabChargesMonthly: '',
         createLogin: true,
@@ -1366,7 +1446,7 @@ function People({
       return false
     }
 
-    return employee.manager === currentUser.name || !managerHasExactReports
+    return employee.manager === currentUser.name || employee.managerEmail === currentUser.email || !managerHasExactReports
   }
 
   return (
@@ -1400,12 +1480,24 @@ function People({
               <option value="Analytics">Analytics</option>
             </select>
             <select
-              value={employeeForm.manager}
-              onChange={(event) => setEmployeeForm((current) => ({ ...current, manager: event.target.value }))}
+              value={employeeForm.managerProfileId || employeeForm.manager}
+              onChange={(event) => {
+                const selected = managerOptions.find((manager) =>
+                  (manager.id || manager.name) === event.target.value,
+                )
+                setEmployeeForm((current) => ({
+                  ...current,
+                  manager: selected?.name || event.target.value,
+                  managerEmail: selected?.email || '',
+                  managerProfileId: selected?.id || '',
+                }))
+              }}
             >
               <option value="">Select manager</option>
               {managerOptions.map((manager) => (
-                <option value={manager} key={manager}>{manager}</option>
+                <option value={manager.id || manager.name} key={manager.id || manager.name}>
+                  {manager.name}{manager.email ? ` - ${manager.email}` : ''}
+                </option>
               ))}
             </select>
             <input

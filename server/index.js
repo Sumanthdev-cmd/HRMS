@@ -719,6 +719,7 @@ const defaultState = {
       content: 'Hybrid attendance policy acknowledgement tracker.',
     },
   ],
+  managerProfiles: [],
   announcements: [
     { id: 'a-1', title: 'Payroll lock', text: 'June payroll closes today at 6:00 PM.' },
     { id: 'a-2', title: 'Policy update', text: 'Hybrid attendance policy is pending acknowledgement.' },
@@ -769,6 +770,7 @@ function mergeWithDefaultState(data) {
     ...merged.permissions.recruiter,
     'leave',
   ]))
+  merged.managerProfiles = data?.managerProfiles || []
   merged.employees = (merged.employees || []).map((employee) => ({
     ...employee,
     leaveAllocation: {
@@ -782,6 +784,64 @@ function mergeWithDefaultState(data) {
   }))
 
   return merged
+}
+
+function normalizeEmployeeManagerProfiles() {
+  state.employees = (state.employees || []).map((employee) => {
+    const managerProfile = findManagerProfile({
+      name: employee.manager,
+      email: employee.managerEmail,
+      id: employee.managerProfileId,
+    })
+
+    if (!managerProfile) {
+      return employee
+    }
+
+    return {
+      ...employee,
+      manager: managerProfile.name,
+      managerEmail: managerProfile.email,
+      managerProfileId: managerProfile.id,
+    }
+  })
+}
+
+async function loadManagerProfilesFromSupabase() {
+  if (!supabaseAdmin) {
+    state.managerProfiles = []
+    return
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, email, full_name, role')
+    .in('role', ['manager', 'admin'])
+    .order('full_name', { ascending: true })
+
+  if (error) {
+    console.warn(`[auth] Could not load manager profiles from Supabase: ${error.message}`)
+    state.managerProfiles = []
+    return
+  }
+
+  state.managerProfiles = (data || []).map((profile) => ({
+    id: profile.id,
+    email: profile.email,
+    name: profile.full_name,
+    role: profile.role,
+  }))
+}
+
+function findManagerProfile({ name, email, id }) {
+  const normalizedName = String(name || '').trim().toLowerCase()
+  const normalizedEmail = String(email || '').trim().toLowerCase()
+
+  return (state.managerProfiles || []).find((profile) =>
+    (id && profile.id === id) ||
+    (normalizedEmail && String(profile.email || '').toLowerCase() === normalizedEmail) ||
+    (normalizedName && String(profile.name || '').toLowerCase() === normalizedName),
+  ) || null
 }
 
 function parseCsvLine(line) {
@@ -956,6 +1016,7 @@ async function loadAnalyticsFromSupabase() {
 function moduleRecordCollections(snapshot) {
   return [
     ['employees', snapshot.employees],
+    ['managerProfiles', snapshot.managerProfiles],
     ['attendance', snapshot.attendance],
     ['performance', snapshot.performance],
     ['payroll', snapshot.payroll],
@@ -1155,12 +1216,14 @@ async function pullExternalSupabaseStateChanges() {
 
   state = mergeWithDefaultState(data.data)
   await loadAnalyticsFromSupabase()
+  await loadManagerProfilesFromSupabase()
+  normalizeEmployeeManagerProfiles()
   updateEmployeeStatusesFromLeaveRequests()
   lastSupabaseStateUpdatedAt = data.updated_at
   broadcastRealtimeState('supabase:external-change')
 }
 
-function createEmployee(name, role, department, manager, attendance, leaves, monthlyGrossSalary, performance, status = 'Active', annualCtc = null, cabChargesMonthly = 0, workEmail = '', loginAccess = null) {
+function createEmployee(name, role, department, manager, attendance, leaves, monthlyGrossSalary, performance, status = 'Active', annualCtc = null, cabChargesMonthly = 0, workEmail = '', loginAccess = null, managerProfile = null) {
   const id = name.toLowerCase().replaceAll(' ', '-')
   const employeeCode = createEmployeeCode(name)
   const salaryDetails = calculateSalaryStructure(annualCtc || monthlyGrossSalary * 12, cabChargesMonthly)
@@ -1172,6 +1235,8 @@ function createEmployee(name, role, department, manager, attendance, leaves, mon
     role,
     department,
     manager,
+    managerEmail: managerProfile?.email || '',
+    managerProfileId: managerProfile?.id || '',
     status,
     attendance,
     leaves,
@@ -1230,6 +1295,8 @@ async function syncEmployeeToSupabase(employee) {
         leave_balance: employee.leaves || 0,
         leave_allocation: employee.leaveAllocation || cloneData(defaultLeaveAllocation),
         manager: employee.manager || '',
+        manager_email: employee.managerEmail || '',
+        manager_profile_id: employee.managerProfileId || '',
         salary: employee.salaryDetails || {},
         login_access: employee.loginAccess || null,
       },
@@ -2028,6 +2095,7 @@ function getBootstrap() {
     roles: state.roles,
     permissions: state.permissions,
     employees: state.employees,
+    managerProfiles: state.managerProfiles || [],
     attendance: state.attendance,
     performance: state.performance,
     payroll: state.payroll,
@@ -2359,6 +2427,8 @@ app.post('/api/employees', async (request, response) => {
   const role = String(request.body.role || '').trim()
   const department = String(request.body.department || '').trim()
   const manager = String(request.body.manager || '').trim()
+  const managerEmail = String(request.body.managerEmail || '').trim()
+  const managerProfileId = String(request.body.managerProfileId || '').trim()
   const workEmail = String(request.body.workEmail || '').trim()
   const ctc = Number(request.body.ctc)
   const cabChargesMonthly = Number(request.body.cabChargesMonthly || 0)
@@ -2376,6 +2446,13 @@ app.post('/api/employees', async (request, response) => {
     response.status(400).json({ error: 'Department must be HR, Product, Revenue, or Analytics' })
     return
   }
+
+  const selectedManagerProfile = findManagerProfile({
+    name: manager,
+    email: managerEmail,
+    id: managerProfileId,
+  })
+  const managerName = selectedManagerProfile?.name || manager
 
   if (createLogin && !workEmail) {
     response.status(400).json({ error: 'Work email is required to create login access' })
@@ -2427,7 +2504,7 @@ app.post('/api/employees', async (request, response) => {
     name,
     role,
     department,
-    manager,
+    managerName,
     0,
     0,
     0,
@@ -2437,6 +2514,7 @@ app.post('/api/employees', async (request, response) => {
     cabChargesMonthly,
     workEmail,
     loginAccess,
+    selectedManagerProfile,
   )
   state.employees.unshift(employee)
   await syncEmployeeToSupabase(employee)
@@ -2457,6 +2535,7 @@ app.post('/api/employees', async (request, response) => {
 app.patch('/api/employees/:id/review', async (request, response) => {
   const actorRole = request.body.actorRole || 'employee'
   const actorName = request.body.actorName || 'Unknown reviewer'
+  const actorEmail = String(request.body.actorEmail || '').trim().toLowerCase()
 
   if (!['manager', 'admin'].includes(actorRole)) {
     response.status(403).json({ error: 'Only Senior Manager or Management Admin can submit employee reviews' })
@@ -2469,9 +2548,15 @@ app.patch('/api/employees/:id/review', async (request, response) => {
     return
   }
 
-  const managerHasExactReports = state.employees.some((item) => item.manager === actorName)
+  const managerHasExactReports = state.employees.some((item) =>
+    item.manager === actorName ||
+    (actorEmail && String(item.managerEmail || '').toLowerCase() === actorEmail),
+  )
+  const isAssignedManager =
+    employee.manager === actorName ||
+    (actorEmail && String(employee.managerEmail || '').toLowerCase() === actorEmail)
 
-  if (actorRole === 'manager' && employee.manager !== actorName && managerHasExactReports) {
+  if (actorRole === 'manager' && !isAssignedManager && managerHasExactReports) {
     response.status(403).json({ error: 'Senior Managers can review only their assigned team members' })
     return
   }
@@ -3447,6 +3532,8 @@ if (existsSync(clientDistPath)) {
 }
 
 await loadHrmsStateFromSupabase()
+await loadManagerProfilesFromSupabase()
+normalizeEmployeeManagerProfiles()
 await loadAnalyticsFromSupabase()
 updateEmployeeStatusesFromLeaveRequests()
 await saveHrmsStateToSupabase()
