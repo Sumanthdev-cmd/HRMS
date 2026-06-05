@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import process from 'node:process'
 import { Buffer } from 'node:buffer'
-import { scryptSync, timingSafeEqual } from 'node:crypto'
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -441,6 +441,35 @@ function videoInterviewEmailContent(shortlist, interview) {
   return { subject, text, html }
 }
 
+function screeningInviteEmailContent(shortlist, screening) {
+  const role = shortlist.bestRole || shortlist.jobTitle || 'the open role'
+  const subject = `AI screening invitation for ${role}`
+  const text = [
+    `Hello ${shortlist.candidate},`,
+    '',
+    `You have been invited to complete an AI-assisted screening conversation for ${role}.`,
+    'Please open the secure link below and answer the screening questions. You can type your answers or use voice input if your browser supports it.',
+    '',
+    screening.inviteUrl,
+    '',
+    'This screening helps HR prepare for review. It is not an automatic hiring decision.',
+    '',
+    'AI-HRMS',
+  ].join('\n')
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #17212b; line-height: 1.5;">
+      <h2>AI screening invitation</h2>
+      <p>Hello ${escapeHtml(shortlist.candidate)},</p>
+      <p>You have been invited to complete an AI-assisted screening conversation for <strong>${escapeHtml(role)}</strong>.</p>
+      <p>Please answer the screening questions using text or voice input if your browser supports it.</p>
+      <p><a href="${escapeHtml(screening.inviteUrl)}" style="display:inline-block;padding:10px 14px;background:#146c94;color:#fff;text-decoration:none;border-radius:7px;">Open screening link</a></p>
+      <p>This screening helps HR prepare for review. It is not an automatic hiring decision.</p>
+    </div>
+  `
+
+  return { subject, text, html }
+}
+
 function screeningQuestionBank(shortlist) {
   const role = shortlist.bestRole || shortlist.jobTitle || 'this role'
   const skills = (shortlist.skills || []).slice(0, 4)
@@ -491,13 +520,20 @@ function createScreeningEvaluation(shortlist, session) {
 
 function ensureScreeningSession(shortlist, actorName = 'HR Recruiter') {
   if (shortlist.aiScreening) {
+    if (!shortlist.aiScreening.inviteToken) {
+      shortlist.aiScreening.inviteToken = randomBytes(24).toString('hex')
+    }
+    shortlist.aiScreening.inviteUrl = `${publicAppUrl}/candidate-screening/${shortlist.id}?token=${shortlist.aiScreening.inviteToken}`
     return shortlist.aiScreening
   }
 
   const questions = screeningQuestionBank(shortlist)
+  const inviteToken = randomBytes(24).toString('hex')
   shortlist.aiScreening = {
     id: `screening-${Date.now()}`,
     status: 'In progress',
+    inviteToken,
+    inviteUrl: `${publicAppUrl}/candidate-screening/${shortlist.id}?token=${inviteToken}`,
     createdBy: actorName,
     createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
     questions,
@@ -516,6 +552,38 @@ function ensureScreeningSession(shortlist, actorName = 'HR Recruiter') {
   }
 
   return shortlist.aiScreening
+}
+
+function publicScreeningPayload(shortlist) {
+  const screening = shortlist.aiScreening
+
+  return {
+    id: screening.id,
+    status: screening.status,
+    candidate: shortlist.candidate,
+    role: shortlist.bestRole || shortlist.jobTitle,
+    appliedFor: shortlist.appliedFor,
+    messages: screening.messages || [],
+    currentQuestionIndex: screening.currentQuestionIndex,
+    totalQuestions: screening.questions?.length || 0,
+  }
+}
+
+function findShortlistByScreeningInvite(request, response) {
+  const shortlist = state.shortlists.find((item) => item.id === request.params.id)
+  const token = String(request.query.token || request.body.token || '').trim()
+
+  if (!shortlist?.aiScreening) {
+    response.status(404).json({ error: 'Screening invitation not found' })
+    return null
+  }
+
+  if (!token || token !== shortlist.aiScreening.inviteToken) {
+    response.status(403).json({ error: 'Invalid or expired screening link' })
+    return null
+  }
+
+  return shortlist
 }
 
 const defaultState = {
@@ -3022,11 +3090,24 @@ app.post('/api/recruitment/shortlist/:id/screening/start', async (request, respo
   }
 
   const screening = ensureScreeningSession(shortlist, request.body.actorName || 'HR Recruiter')
+  const emailResult = await sendEmail({
+    to: shortlist.email,
+    ...screeningInviteEmailContent(shortlist, screening),
+  })
+
+  if (!emailResult.sent) {
+    response.status(502).json({ error: `AI screening invite could not be sent: ${emailResult.error}` })
+    return
+  }
+
   shortlist.status = shortlist.selected ? shortlist.status : 'AI screening in progress'
+  shortlist.aiScreening.invited = true
+  shortlist.aiScreening.invitedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  shortlist.aiScreening.emailProviderId = emailResult.providerId
   await syncShortlistedCandidateToSupabase(shortlist)
   state.notifications.unshift({
     id: `n-${Date.now()}`,
-    text: `AI screening started for ${shortlist.candidate}.`,
+    text: `AI screening invite sent to ${shortlist.candidate}.`,
     read: false,
   })
 
@@ -3093,6 +3174,82 @@ app.post('/api/recruitment/shortlist/:id/screening/message', async (request, res
   await syncShortlistedCandidateToSupabase(shortlist)
 
   response.json({ screening, shortlist, shortlists: state.shortlists, notifications: state.notifications })
+})
+
+app.get('/api/public/screening/:id', (request, response) => {
+  const shortlist = findShortlistByScreeningInvite(request, response)
+
+  if (!shortlist) {
+    return
+  }
+
+  response.json({ screening: publicScreeningPayload(shortlist) })
+})
+
+app.post('/api/public/screening/:id/message', async (request, response) => {
+  const shortlist = findShortlistByScreeningInvite(request, response)
+
+  if (!shortlist) {
+    return
+  }
+
+  const text = String(request.body.text || '').trim()
+  const mode = request.body.mode === 'voice' ? 'voice' : 'text'
+
+  if (!text) {
+    response.status(400).json({ error: 'Answer is required' })
+    return
+  }
+
+  const screening = ensureScreeningSession(shortlist)
+
+  if (screening.status === 'Completed') {
+    response.status(409).json({ error: 'This screening is already completed' })
+    return
+  }
+
+  const createdAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  screening.messages.push({
+    id: `screen-msg-${Date.now()}-candidate`,
+    sender: 'candidate',
+    mode,
+    text,
+    createdAt,
+  })
+
+  if (mode === 'voice') {
+    screening.voiceTranscripts.push({
+      id: `voice-${Date.now()}`,
+      text,
+      createdAt,
+    })
+  }
+
+  const nextQuestionIndex = screening.currentQuestionIndex + 1
+  screening.currentQuestionIndex = nextQuestionIndex
+
+  if (nextQuestionIndex < screening.questions.length) {
+    screening.messages.push({
+      id: `screen-msg-${Date.now()}-ai`,
+      sender: 'ai',
+      mode: 'text',
+      text: screening.questions[nextQuestionIndex],
+      createdAt,
+    })
+  } else {
+    screening.status = 'Completed'
+    shortlist.status = 'AI screening completed'
+    state.notifications.unshift({
+      id: `n-${Date.now()}`,
+      text: `${shortlist.candidate} completed AI screening for ${shortlist.bestRole || shortlist.jobTitle}.`,
+      read: false,
+    })
+  }
+
+  screening.evaluation = createScreeningEvaluation(shortlist, screening)
+  await syncShortlistedCandidateToSupabase(shortlist)
+
+  response.json({ screening: publicScreeningPayload(shortlist) })
 })
 
 app.patch('/api/recruitment/shortlist/:id/selection', async (request, response) => {

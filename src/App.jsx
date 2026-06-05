@@ -90,6 +90,7 @@ async function api(path, options = {}) {
 }
 
 function App() {
+  const publicScreeningMatch = window.location.pathname.match(/^\/candidate-screening\/([^/]+)/)
   const [data, setData] = useState(null)
   const [auth, setAuth] = useState(null)
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
@@ -192,6 +193,10 @@ function App() {
     document.addEventListener('mousedown', closeNotificationsOnOutsideClick)
     return () => document.removeEventListener('mousedown', closeNotificationsOnOutsideClick)
   }, [notificationsOpen])
+
+  if (publicScreeningMatch) {
+    return <CandidateScreeningPortal shortlistId={publicScreeningMatch[1]} />
+  }
 
   async function handleLogin(event) {
     event.preventDefault()
@@ -879,6 +884,144 @@ function LoginScreen({ form, setForm, status, onSubmit }) {
           </button>
           <p className="login-status">{status}</p>
         </form>
+      </section>
+    </main>
+  )
+}
+
+function CandidateScreeningPortal({ shortlistId }) {
+  const token = new URLSearchParams(window.location.search).get('token') || ''
+  const [screening, setScreening] = useState(null)
+  const [answer, setAnswer] = useState('')
+  const [status, setStatus] = useState('Opening screening invitation...')
+  const [voiceStatus, setVoiceStatus] = useState('Voice answer ready.')
+
+  useEffect(() => {
+    api(`/api/public/screening/${shortlistId}?token=${encodeURIComponent(token)}`)
+      .then((result) => {
+        setScreening(result.screening)
+        setStatus('Screening loaded. Please answer each question clearly.')
+      })
+      .catch((error) => setStatus(error.message || 'Screening link could not be opened.'))
+  }, [shortlistId, token])
+
+  function submitAnswer(event, mode = 'text', voiceText = '') {
+    event.preventDefault()
+    const text = String(voiceText || answer).trim()
+
+    if (!text) {
+      setStatus('Please enter an answer before submitting.')
+      return
+    }
+
+    setStatus('Saving your answer...')
+    api(`/api/public/screening/${shortlistId}/message?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      body: JSON.stringify({ text, mode, token }),
+    })
+      .then((result) => {
+        setScreening(result.screening)
+        setAnswer('')
+        setStatus(result.screening.status === 'Completed'
+          ? 'Screening completed. Thank you. HR will review your responses.'
+          : 'Answer saved. Please continue with the next question.')
+      })
+      .catch((error) => setStatus(error.message || 'Could not save your answer.'))
+  }
+
+  function captureVoiceAnswer() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+
+    if (!SpeechRecognition) {
+      setVoiceStatus('Voice recognition is not supported in this browser. Please type your answer.')
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'en-IN'
+    recognition.interimResults = false
+    recognition.continuous = false
+    setVoiceStatus('Listening...')
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || '')
+        .join(' ')
+        .trim()
+
+      if (!transcript) {
+        setVoiceStatus('No voice answer captured.')
+        return
+      }
+
+      setVoiceStatus(`Captured: ${transcript}`)
+      submitAnswer({ preventDefault: () => {} }, 'voice', transcript)
+    }
+
+    recognition.onerror = () => {
+      setVoiceStatus('Voice capture failed. Please try again or type your answer.')
+    }
+
+    recognition.start()
+  }
+
+  return (
+    <main className="candidate-screening-page">
+      <section className="candidate-screening-panel">
+        <div className="brand login-brand">
+          <div className="brand-mark">
+            <Sparkles size={24} />
+          </div>
+          <div>
+            <strong>AI-HRMS Screening</strong>
+            <span>Candidate conversation</span>
+          </div>
+        </div>
+
+        {screening && (
+          <div className="candidate-screening-meta">
+            <h1>{screening.role}</h1>
+            <p>{screening.candidate}</p>
+            <span>{screening.status} - {screening.currentQuestionIndex} of {screening.totalQuestions} answered</span>
+          </div>
+        )}
+
+        <div className="screening-chat public">
+          {(screening?.messages || []).map((message) => (
+            <div
+              className={message.sender === 'ai' ? 'screening-message ai' : 'screening-message candidate'}
+              key={message.id}
+            >
+              <span>{message.sender === 'ai' ? 'AI question' : message.mode === 'voice' ? 'Your voice answer' : 'Your answer'}</span>
+              <p>{message.text}</p>
+              <small>{message.createdAt}</small>
+            </div>
+          ))}
+        </div>
+
+        {screening?.status !== 'Completed' && screening && (
+          <form className="candidate-answer-form" onSubmit={submitAnswer}>
+            <textarea
+              value={answer}
+              onChange={(event) => setAnswer(event.target.value)}
+              placeholder="Type your answer here"
+            />
+            <div className="row-actions">
+              <button type="submit">Submit answer</button>
+              <button type="button" onClick={captureVoiceAnswer}>
+                <Mic size={16} />
+                Voice answer
+              </button>
+            </div>
+            <small>{voiceStatus}</small>
+          </form>
+        )}
+
+        <p className="login-status">{status}</p>
+        <div className="safety-note">
+          <ShieldCheck size={18} />
+          Your responses are shared with HR for human review. AI does not make final hiring decisions.
+        </div>
       </section>
     </main>
   )
@@ -2064,8 +2207,6 @@ function Recruitment({
 }) {
   const [selectedResumes, setSelectedResumes] = useState([])
   const [interviewForms, setInterviewForms] = useState({})
-  const [screeningDrafts, setScreeningDrafts] = useState({})
-  const [screeningVoiceStatus, setScreeningVoiceStatus] = useState({})
   const [jobForm, setJobForm] = useState({
     title: '',
     department: '',
@@ -2115,66 +2256,6 @@ function Recruitment({
         },
       }))
     }, `Video interview scheduled and email prepared for ${item.email}.`)
-  }
-
-  function updateScreeningDraft(id, value) {
-    setScreeningDrafts((current) => ({ ...current, [id]: value }))
-  }
-
-  function sendScreeningAnswer(event, item) {
-    event.preventDefault()
-    const text = String(screeningDrafts[item.id] || '').trim()
-
-    if (!text) {
-      return
-    }
-
-    runAction(async () => {
-      await actions.sendCandidateScreeningMessage(item.id, text, 'text')
-      updateScreeningDraft(item.id, '')
-    }, 'AI screening answer saved and evaluated.')
-  }
-
-  function captureVoiceScreeningAnswer(item) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-
-    if (!SpeechRecognition) {
-      setScreeningVoiceStatus((current) => ({
-        ...current,
-        [item.id]: 'Voice recognition is not supported in this browser. Type the transcript instead.',
-      }))
-      return
-    }
-
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-IN'
-    recognition.interimResults = false
-    recognition.continuous = false
-    setScreeningVoiceStatus((current) => ({ ...current, [item.id]: 'Listening to candidate answer...' }))
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0]?.transcript || '')
-        .join(' ')
-        .trim()
-
-      if (!transcript) {
-        setScreeningVoiceStatus((current) => ({ ...current, [item.id]: 'No voice transcript captured.' }))
-        return
-      }
-
-      runAction(
-        () => actions.sendCandidateScreeningMessage(item.id, transcript, 'voice'),
-        'Voice screening transcript saved and evaluated.',
-      )
-      setScreeningVoiceStatus((current) => ({ ...current, [item.id]: `Captured: ${transcript}` }))
-    }
-
-    recognition.onerror = () => {
-      setScreeningVoiceStatus((current) => ({ ...current, [item.id]: 'Voice capture failed. Please try again or type the answer.' }))
-    }
-
-    recognition.start()
   }
 
   return (
@@ -2443,16 +2524,23 @@ function Recruitment({
                       onClick={() =>
                         runAction(
                           () => actions.startCandidateScreening(item.id),
-                          `AI screening started for ${item.candidate}.`,
+                          `AI screening invitation sent to ${item.email}.`,
                         )
                       }
                     >
-                      {item.aiScreening ? 'Resume screening' : 'Start screening'}
+                      {item.aiScreening ? 'Resend invite' : 'Invite candidate'}
                     </button>
                   )}
                 </div>
                 {item.aiScreening && (
                   <>
+                    <div className="screening-invite-row">
+                      <span>Candidate link</span>
+                      <a href={item.aiScreening.inviteUrl} target="_blank" rel="noreferrer">
+                        Open candidate screening page
+                      </a>
+                      {item.aiScreening.invitedAt && <small>Invited {item.aiScreening.invitedAt}</small>}
+                    </div>
                     <div className="screening-chat">
                       {item.aiScreening.messages.map((message) => (
                         <div
@@ -2476,23 +2564,6 @@ function Recruitment({
                         <p>{item.aiScreening.evaluation.hrRecommendationNote}</p>
                         <small>Final hiring decision remains with HR.</small>
                       </div>
-                    )}
-                    {canListRole && item.aiScreening.status !== 'Completed' && (
-                      <form className="screening-answer-form" onSubmit={(event) => sendScreeningAnswer(event, item)}>
-                        <textarea
-                          value={screeningDrafts[item.id] || ''}
-                          onChange={(event) => updateScreeningDraft(item.id, event.target.value)}
-                          placeholder="Type candidate answer or capture it by voice"
-                        />
-                        <div className="row-actions">
-                          <button type="submit">Send answer</button>
-                          <button type="button" onClick={() => captureVoiceScreeningAnswer(item)}>
-                            <Mic size={16} />
-                            Voice answer
-                          </button>
-                        </div>
-                        {screeningVoiceStatus[item.id] && <small>{screeningVoiceStatus[item.id]}</small>}
-                      </form>
                     )}
                   </>
                 )}
