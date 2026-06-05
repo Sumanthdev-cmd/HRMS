@@ -147,6 +147,24 @@ async function loginWithSupabase(email, password) {
 
   const metadata = data.user.user_metadata || {}
   const role = normalizeRole(profile?.role) || normalizeRole(metadata.role) || inferRoleFromEmail(data.user.email)
+  const fullName = profile?.full_name || metadata.full_name || data.user.email
+
+  if (!profile && supabaseAdmin && role) {
+    const { error: repairError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: data.user.id,
+        email: data.user.email,
+        full_name: fullName,
+        role,
+      }, {
+        onConflict: 'id',
+      })
+
+    if (repairError) {
+      console.warn(`[auth] Could not repair missing profile for ${data.user.email}: ${repairError.message}`)
+    }
+  }
 
   if (!role) {
     console.warn(`[auth] Supabase login succeeded for ${data.user.email}, but no profile role was found.`)
@@ -160,7 +178,7 @@ async function loginWithSupabase(email, password) {
     token: data.session.access_token,
     user: {
       email: data.user.email,
-      name: profile?.full_name || metadata.full_name || data.user.email,
+      name: fullName,
       role: role || 'employee',
     },
   }
