@@ -897,7 +897,7 @@ h3 {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 920px;
+  min-width: 1120px;
 }
 
 th,
@@ -1008,6 +1008,42 @@ th {
 .employee-login-toggle input {
   width: 16px;
   min-height: 16px;
+}
+
+.review-form {
+  display: grid;
+  grid-template-columns: 76px minmax(150px, 1fr);
+  gap: 6px;
+  min-width: 330px;
+}
+
+.review-form input,
+.review-form select {
+  min-height: 32px;
+  width: 100%;
+  border: 1px solid #dbe3e7;
+  border-radius: 7px;
+  background: #fff;
+  color: #17212b;
+  font: inherit;
+  font-size: 12px;
+}
+
+.review-form input:nth-of-type(n + 2),
+.review-form button {
+  grid-column: 1 / -1;
+}
+
+.review-form button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: #146c94;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .employee-form button {

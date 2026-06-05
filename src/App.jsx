@@ -304,6 +304,22 @@ function App() {
       }))
       return result
     },
+    reviewEmployee: async (employeeId, review) => {
+      const result = await api(`/api/employees/${employeeId}/review`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...review,
+          actorName: auth.user.name,
+          actorRole: role,
+        }),
+      })
+      setData((current) => ({
+        ...current,
+        employees: result.employees,
+        metrics: result.metrics,
+        notifications: result.notifications,
+      }))
+    },
     uploadDocument: async (documentForm) => {
       const formData = new FormData()
       formData.append('title', documentForm.title)
@@ -773,6 +789,7 @@ function App() {
             onDepartmentSelect={setDepartmentFilter}
             canAddEmployee={role === 'recruiter' || role === 'admin'}
             currentUser={auth.user}
+            role={role}
           />
         )}
         {safeActiveTab === 'attendance' && (
@@ -1256,6 +1273,7 @@ function People({
   onDepartmentSelect,
   canAddEmployee,
   currentUser,
+  role,
 }) {
   const [employeeForm, setEmployeeForm] = useState({
     name: '',
@@ -1276,6 +1294,8 @@ function People({
     category: 'Policy',
     file: null,
   })
+  const [reviewForms, setReviewForms] = useState({})
+  const canReviewEmployees = role === 'manager' || role === 'admin'
 
   function submitEmployee(event) {
     event.preventDefault()
@@ -1304,6 +1324,36 @@ function People({
       setDocumentForm({ title: '', category: 'Policy', file: null })
       event.target.reset()
     }, 'Document uploaded and added to the manager document list.')
+  }
+
+  function updateReviewForm(employeeId, field, value) {
+    setReviewForms((current) => ({
+      ...current,
+      [employeeId]: {
+        ...(current[employeeId] || {}),
+        [field]: value,
+      },
+    }))
+  }
+
+  function submitReview(event, employee) {
+    event.preventDefault()
+    const form = reviewForms[employee.id] || {}
+
+    runAction(async () => {
+      await actions.reviewEmployee(employee.id, form)
+      setReviewForms((current) => ({
+        ...current,
+        [employee.id]: {
+          score: '',
+          rating: '',
+          focusArea: '',
+          achievements: '',
+          improvementPlan: '',
+          cycle: '',
+        },
+      }))
+    }, `Performance review submitted for ${employee.name}.`)
   }
 
   return (
@@ -1405,6 +1455,7 @@ function People({
                 <th>Attendance</th>
                 <th>Performance</th>
                 <th>Status</th>
+                {canReviewEmployees && <th>Review</th>}
               </tr>
             </thead>
             <tbody>
@@ -1437,6 +1488,58 @@ function People({
                       {employee.status}
                     </span>
                   </td>
+                  {canReviewEmployees && (
+                    <td>
+                      {role === 'admin' || employee.manager === currentUser.name ? (
+                        <form className="review-form" onSubmit={(event) => submitReview(event, employee)}>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={reviewForms[employee.id]?.score || ''}
+                            onChange={(event) => updateReviewForm(employee.id, 'score', event.target.value)}
+                            placeholder="Score"
+                            required
+                          />
+                          <select
+                            value={reviewForms[employee.id]?.rating || ''}
+                            onChange={(event) => updateReviewForm(employee.id, 'rating', event.target.value)}
+                            required
+                          >
+                            <option value="">Rating</option>
+                            <option value="Exceeds expectations">Exceeds expectations</option>
+                            <option value="Meets expectations">Meets expectations</option>
+                            <option value="Needs improvement">Needs improvement</option>
+                            <option value="New hire review">New hire review</option>
+                          </select>
+                          <input
+                            value={reviewForms[employee.id]?.focusArea || ''}
+                            onChange={(event) => updateReviewForm(employee.id, 'focusArea', event.target.value)}
+                            placeholder="Focus area"
+                            required
+                          />
+                          <input
+                            value={reviewForms[employee.id]?.achievements || ''}
+                            onChange={(event) => updateReviewForm(employee.id, 'achievements', event.target.value)}
+                            placeholder="Achievements"
+                          />
+                          <input
+                            value={reviewForms[employee.id]?.improvementPlan || ''}
+                            onChange={(event) => updateReviewForm(employee.id, 'improvementPlan', event.target.value)}
+                            placeholder="Improvement plan"
+                          />
+                          <input
+                            value={reviewForms[employee.id]?.cycle || ''}
+                            onChange={(event) => updateReviewForm(employee.id, 'cycle', event.target.value)}
+                            placeholder="Review cycle"
+                          />
+                          <button type="submit">Submit review</button>
+                        </form>
+                      ) : (
+                        <span className="muted">Assigned manager only</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -1572,6 +1675,9 @@ function PerformanceDetails({ employee }) {
       <span>{details.rating}</span>
       <small>{details.reviewCycle}</small>
       <small>{details.focusArea}</small>
+      {details.achievements && <small>Wins: {details.achievements}</small>}
+      {details.improvementPlan && <small>Plan: {details.improvementPlan}</small>}
+      {details.reviewedBy && <small>By {details.reviewedBy} on {details.reviewedAt}</small>}
     </div>
   )
 }

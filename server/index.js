@@ -2454,6 +2454,72 @@ app.post('/api/employees', async (request, response) => {
   })
 })
 
+app.patch('/api/employees/:id/review', async (request, response) => {
+  const actorRole = request.body.actorRole || 'employee'
+  const actorName = request.body.actorName || 'Unknown reviewer'
+
+  if (!['manager', 'admin'].includes(actorRole)) {
+    response.status(403).json({ error: 'Only Senior Manager or Management Admin can submit employee reviews' })
+    return
+  }
+
+  const employee = state.employees.find((item) => item.id === request.params.id || item.employeeCode === request.params.id)
+  if (!employee) {
+    response.status(404).json({ error: 'Employee not found' })
+    return
+  }
+
+  if (actorRole === 'manager' && employee.manager !== actorName) {
+    response.status(403).json({ error: 'Senior Managers can review only their assigned team members' })
+    return
+  }
+
+  const score = Number(request.body.score)
+  const rating = String(request.body.rating || '').trim()
+  const focusArea = String(request.body.focusArea || '').trim()
+  const achievements = String(request.body.achievements || '').trim()
+  const improvementPlan = String(request.body.improvementPlan || '').trim()
+
+  if (!Number.isFinite(score) || score < 0 || score > 100 || !rating || !focusArea) {
+    response.status(400).json({ error: 'Score between 0 and 100, rating, and focus area are required' })
+    return
+  }
+
+  const reviewedAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  const review = {
+    id: `review-${Date.now()}`,
+    score,
+    rating,
+    focusArea,
+    achievements,
+    improvementPlan,
+    reviewedBy: actorName,
+    reviewedAt,
+    cycle: request.body.cycle || 'Current review cycle',
+  }
+
+  employee.performance = score
+  employee.performanceDetails = {
+    rating,
+    reviewCycle: review.cycle,
+    focusArea,
+    achievements,
+    improvementPlan,
+    reviewedBy: actorName,
+    reviewedAt,
+  }
+  employee.performanceReviews = [review, ...(employee.performanceReviews || [])]
+
+  await syncEmployeeToSupabase(employee)
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    text: `${actorName} submitted performance review for ${employee.name}.`,
+    read: false,
+  })
+
+  response.json({ employee, employees: state.employees, metrics: dashboardMetrics(), notifications: state.notifications })
+})
+
 app.post('/api/documents', upload.single('document'), (request, response) => {
   const title = String(request.body.title || request.file?.originalname || '').trim()
   const category = String(request.body.category || 'General').trim()
