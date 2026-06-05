@@ -441,6 +441,83 @@ function videoInterviewEmailContent(shortlist, interview) {
   return { subject, text, html }
 }
 
+function screeningQuestionBank(shortlist) {
+  const role = shortlist.bestRole || shortlist.jobTitle || 'this role'
+  const skills = (shortlist.skills || []).slice(0, 4)
+  const topSkill = skills[0] || 'your strongest technical skill'
+  const missingSkill = shortlist.roleMatches?.[0]?.missing?.[0] || 'a skill listed in the job description'
+
+  return [
+    `Please introduce yourself and explain why you are interested in ${role}.`,
+    `Describe one project where you used ${topSkill}. What was your responsibility and result?`,
+    `The role may require ${missingSkill}. How would you approach learning or applying it?`,
+    'Tell us about a difficult project situation and how you handled it.',
+    'What is your notice period, availability, and preferred work location?',
+  ]
+}
+
+function createScreeningEvaluation(shortlist, session) {
+  const answers = (session.messages || []).filter((message) => message.sender === 'candidate')
+  const transcript = answers.map((message) => message.text).join(' ').toLowerCase()
+  const candidateSkills = (shortlist.skills || []).map((skill) => String(skill).toLowerCase())
+  const mentionedSkills = candidateSkills.filter((skill) => transcript.includes(skill.toLowerCase()))
+  const wordCount = transcript.split(/\s+/).filter(Boolean).length
+  const communicationScore = Math.min(100, Math.max(20, Math.round(wordCount / Math.max(answers.length, 1) * 2)))
+  const skillEvidenceScore = candidateSkills.length
+    ? Math.round((mentionedSkills.length / candidateSkills.length) * 100)
+    : 0
+  const overallScore = Math.round((communicationScore * 0.35) + (skillEvidenceScore * 0.35) + (Number(shortlist.score || 0) * 0.3))
+
+  return {
+    overallScore,
+    communicationScore,
+    skillEvidenceScore,
+    answeredQuestions: answers.length,
+    mentionedSkills,
+    strengths: [
+      mentionedSkills.length ? `Mentioned ${mentionedSkills.slice(0, 3).join(', ')} during screening.` : 'Resume-based skill evidence should be probed further.',
+      wordCount > 80 ? 'Gave detailed responses suitable for HR review.' : 'Responses are brief and need follow-up questions.',
+    ],
+    concerns: [
+      answers.length < 3 ? 'Screening is incomplete; HR should collect more answers.' : null,
+      skillEvidenceScore < 50 ? 'Limited direct skill evidence in screening answers.' : null,
+    ].filter(Boolean),
+    hrRecommendationNote: overallScore >= 70
+      ? 'AI suggests moving to structured HR/technical interview. Final decision remains with HR.'
+      : 'AI suggests HR follow-up before moving ahead. Final decision remains with HR.',
+    generatedAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+  }
+}
+
+function ensureScreeningSession(shortlist, actorName = 'HR Recruiter') {
+  if (shortlist.aiScreening) {
+    return shortlist.aiScreening
+  }
+
+  const questions = screeningQuestionBank(shortlist)
+  shortlist.aiScreening = {
+    id: `screening-${Date.now()}`,
+    status: 'In progress',
+    createdBy: actorName,
+    createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+    questions,
+    currentQuestionIndex: 0,
+    messages: [
+      {
+        id: `screen-msg-${Date.now()}`,
+        sender: 'ai',
+        mode: 'text',
+        text: questions[0],
+        createdAt: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      },
+    ],
+    voiceTranscripts: [],
+    evaluation: null,
+  }
+
+  return shortlist.aiScreening
+}
+
 const defaultState = {
   roles: [
     {
@@ -824,6 +901,14 @@ function moduleRecordCollections(snapshot) {
     ['announcements', snapshot.announcements],
     ['insights', snapshot.insights],
     ['shortlists', snapshot.shortlists],
+    ['candidateScreenings', (snapshot.shortlists || [])
+      .filter((shortlist) => shortlist.aiScreening)
+      .map((shortlist) => ({
+        ...shortlist.aiScreening,
+        shortlistId: shortlist.id,
+        candidate: shortlist.candidate,
+        email: shortlist.email,
+      }))],
     ['teams', snapshot.teams],
     ['teamMessages', (snapshot.teams || []).flatMap((team) =>
       (team.messages || []).map((message) => ({
@@ -2921,6 +3006,93 @@ app.post('/api/recruitment/shortlist/:id/video-interview', async (request, respo
   })
 
   response.json({ shortlist, shortlists: state.shortlists, notifications: state.notifications })
+})
+
+app.post('/api/recruitment/shortlist/:id/screening/start', async (request, response) => {
+  const actorRole = request.body.actorRole || 'employee'
+  if (!['admin', 'recruiter'].includes(actorRole)) {
+    response.status(403).json({ error: 'Only HR Recruiter or Management Admin can start AI screening' })
+    return
+  }
+
+  const shortlist = state.shortlists.find((item) => item.id === request.params.id)
+  if (!shortlist) {
+    response.status(404).json({ error: 'Shortlisted candidate not found' })
+    return
+  }
+
+  const screening = ensureScreeningSession(shortlist, request.body.actorName || 'HR Recruiter')
+  shortlist.status = shortlist.selected ? shortlist.status : 'AI screening in progress'
+  await syncShortlistedCandidateToSupabase(shortlist)
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    text: `AI screening started for ${shortlist.candidate}.`,
+    read: false,
+  })
+
+  response.status(201).json({ screening, shortlist, shortlists: state.shortlists, notifications: state.notifications })
+})
+
+app.post('/api/recruitment/shortlist/:id/screening/message', async (request, response) => {
+  const actorRole = request.body.actorRole || 'employee'
+  if (!['admin', 'recruiter'].includes(actorRole)) {
+    response.status(403).json({ error: 'Only HR Recruiter or Management Admin can record AI screening responses' })
+    return
+  }
+
+  const shortlist = state.shortlists.find((item) => item.id === request.params.id)
+  if (!shortlist) {
+    response.status(404).json({ error: 'Shortlisted candidate not found' })
+    return
+  }
+
+  const text = String(request.body.text || '').trim()
+  const mode = request.body.mode === 'voice' ? 'voice' : 'text'
+
+  if (!text) {
+    response.status(400).json({ error: 'Screening answer is required' })
+    return
+  }
+
+  const screening = ensureScreeningSession(shortlist, request.body.actorName || 'HR Recruiter')
+  const createdAt = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+  screening.messages.push({
+    id: `screen-msg-${Date.now()}-candidate`,
+    sender: 'candidate',
+    mode,
+    text,
+    createdAt,
+  })
+
+  if (mode === 'voice') {
+    screening.voiceTranscripts.push({
+      id: `voice-${Date.now()}`,
+      text,
+      createdAt,
+    })
+  }
+
+  const nextQuestionIndex = screening.currentQuestionIndex + 1
+  screening.currentQuestionIndex = nextQuestionIndex
+
+  if (nextQuestionIndex < screening.questions.length) {
+    screening.messages.push({
+      id: `screen-msg-${Date.now()}-ai`,
+      sender: 'ai',
+      mode: 'text',
+      text: screening.questions[nextQuestionIndex],
+      createdAt,
+    })
+  } else {
+    screening.status = 'Completed'
+  }
+
+  screening.evaluation = createScreeningEvaluation(shortlist, screening)
+  shortlist.aiScreening = screening
+  shortlist.status = screening.status === 'Completed' ? 'AI screening completed' : 'AI screening in progress'
+  await syncShortlistedCandidateToSupabase(shortlist)
+
+  response.json({ screening, shortlist, shortlists: state.shortlists, notifications: state.notifications })
 })
 
 app.patch('/api/recruitment/shortlist/:id/selection', async (request, response) => {

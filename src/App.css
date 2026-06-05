@@ -1664,6 +1664,113 @@ th {
   cursor: pointer;
 }
 
+.screening-session {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #d9e8ef;
+  border-radius: 8px;
+  background: #f7fbfd;
+}
+
+.screening-session-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.screening-session-head strong,
+.screening-session-head span {
+  display: block;
+}
+
+.screening-session-head button,
+.screening-answer-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: #146c94;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.screening-chat {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.screening-message {
+  padding: 9px;
+  border: 1px solid #e5ecef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.screening-message.candidate {
+  border-color: #cfe8d4;
+  background: #f3fbf5;
+}
+
+.screening-message span {
+  color: #146c94;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.screening-message p {
+  margin: 5px 0;
+}
+
+.screening-evaluation {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #f2d7a8;
+  border-radius: 8px;
+  background: #fff9ec;
+}
+
+.screening-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.screening-score-grid span {
+  padding: 7px;
+  border-radius: 7px;
+  background: #fff;
+  color: #17212b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.screening-answer-form {
+  display: grid;
+  gap: 8px;
+}
+
+.screening-answer-form textarea {
+  width: 100%;
+  min-height: 76px;
+  border: 1px solid #cfdde3;
+  border-radius: 7px;
+  background: #fff;
+  color: #17212b;
+  font: inherit;
+  resize: vertical;
+}
+
 .best-role,
 .applied-role {
   margin: 0 0 8px;
@@ -2039,7 +2146,8 @@ th {
   .department-grid,
   .salary-calculator,
   .interview-form,
-  .password-panel {
+  .password-panel,
+  .screening-score-grid {
     grid-template-columns: 1fr;
   }
 
