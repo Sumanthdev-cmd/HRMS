@@ -2037,6 +2037,12 @@ function dashboardMetrics() {
   ]
 }
 
+function allocatedLeaveBalance(employee) {
+  const allocation = employee.leaveAllocation || cloneData(defaultLeaveAllocation)
+  const allocated = Number(allocation.casual || 0) + Number(allocation.sick || 0) + Number(allocation.earned || 0)
+  return Number(employee.leaves || 0) > 0 ? Number(employee.leaves || 0) : allocated
+}
+
 function dashboardEmployeeSummary(employee) {
   if (!employee) {
     return null
@@ -2056,7 +2062,7 @@ function dashboardEmployeeSummary(employee) {
     manager: employee.manager,
     status: employee.status,
     attendance: employee.attendance || 0,
-    leaveBalance: employee.leaves || 0,
+    leaveBalance: allocatedLeaveBalance(employee),
     performance: employee.performance || 0,
     productivity,
     tasks: {

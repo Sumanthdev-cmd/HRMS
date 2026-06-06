@@ -720,7 +720,7 @@ function App() {
           </button>
           <div>
             <p className="eyebrow">Human resources operating system</p>
-            <h1>{pageTitle(safeActiveTab)}</h1>
+            <h1>{pageTitle(safeActiveTab, role)}</h1>
           </div>
           <div className="topbar-actions">
             <DateTimeBadge />
@@ -914,7 +914,11 @@ function App() {
   )
 }
 
-function pageTitle(tab) {
+function pageTitle(tab, role = '') {
+  if (tab === 'dashboard' && role === 'employee') {
+    return 'My Dashboard'
+  }
+
   const labels = {
     dashboard: 'Company Dashboard',
     people: 'Employee Profiles',
@@ -1367,11 +1371,31 @@ function personalDashboardMetrics(dashboard) {
     ]
   }
 
+  const hasTasks = dashboard.tasks.total > 0
+  const leaveDetail = dashboard.leaves.pending
+    ? `${dashboard.leaves.pending} pending request${dashboard.leaves.pending === 1 ? '' : 's'}`
+    : 'No pending requests'
+
   return [
-    { id: 'attendance', label: 'Attendance', value: `${dashboard.attendance}%`, detail: dashboard.status },
-    { id: 'tasks', label: 'My tasks', value: String(dashboard.tasks.total), detail: `${dashboard.tasks.pending} pending` },
-    { id: 'performance', label: 'Productivity', value: `${dashboard.productivity.score}%`, detail: 'From task activity' },
-    { id: 'leave', label: 'Leave balance', value: String(dashboard.leaveBalance), detail: `${dashboard.leaves.pending} pending requests` },
+    {
+      id: 'attendance',
+      label: 'Attendance',
+      value: dashboard.attendance > 0 ? `${dashboard.attendance}%` : 'Not tracked',
+      detail: dashboard.status,
+    },
+    {
+      id: 'tasks',
+      label: 'My tasks',
+      value: String(dashboard.tasks.total),
+      detail: hasTasks ? `${dashboard.tasks.pending} pending` : 'No tasks assigned',
+    },
+    {
+      id: 'performance',
+      label: 'Productivity',
+      value: hasTasks ? `${dashboard.productivity.score}%` : 'Not started',
+      detail: hasTasks ? 'From task activity' : 'Waiting for tasks',
+    },
+    { id: 'leave', label: 'Leave balance', value: String(dashboard.leaveBalance), detail: leaveDetail },
   ]
 }
 
@@ -1381,8 +1405,11 @@ function PersonalDashboard({ dashboard }) {
       <div className="activity-summary-grid">
         <InfoRow title="Profile" text={`${dashboard.employeeCode} - ${dashboard.role} - ${dashboard.department}`} />
         <InfoRow title="Manager" text={dashboard.manager || 'Not assigned'} />
-        <InfoRow title="Performance" text={`${dashboard.performance || 0}/100 current review score`} />
-        <InfoRow title="Productivity formula" text={`${dashboard.productivity.score}% from completion, on-time delivery, quality, and attendance`} />
+        <InfoRow title="Performance" text={dashboard.performance ? `${dashboard.performance}/100 current review score` : 'First review pending'} />
+        <InfoRow
+          title="Productivity formula"
+          text={dashboard.tasks.total ? `${dashboard.productivity.score}% from completion, on-time delivery, quality, and attendance` : 'Productivity starts once tasks are assigned'}
+        />
       </div>
       <div className="activity-columns">
         <div>
