@@ -990,6 +990,8 @@ function CandidateScreeningPortal({ shortlistId }) {
   const [answer, setAnswer] = useState('')
   const [status, setStatus] = useState('Opening screening invitation...')
   const [voiceStatus, setVoiceStatus] = useState('Voice answer ready.')
+  const chatEndRef = useRef(null)
+  const answerRef = useRef(null)
 
   useEffect(() => {
     api(`/api/public/screening/${shortlistId}?token=${encodeURIComponent(token)}`)
@@ -999,6 +1001,19 @@ function CandidateScreeningPortal({ shortlistId }) {
       })
       .catch((error) => setStatus(error.message || 'Screening link could not be opened.'))
   }, [shortlistId, token])
+
+  useEffect(() => {
+    if (!screening) {
+      return
+    }
+
+    window.setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      if (screening.status !== 'Completed') {
+        answerRef.current?.focus()
+      }
+    }, 80)
+  }, [screening])
 
   function submitAnswer(event, mode = 'text', voiceText = '') {
     event.preventDefault()
@@ -1060,6 +1075,13 @@ function CandidateScreeningPortal({ shortlistId }) {
     recognition.start()
   }
 
+  function questionNumberForMessage(messages, index) {
+    return messages
+      .slice(0, index + 1)
+      .filter((message) => message.sender === 'ai')
+      .length
+  }
+
   return (
     <main className="candidate-screening-page">
       <section className="candidate-screening-panel">
@@ -1077,30 +1099,49 @@ function CandidateScreeningPortal({ shortlistId }) {
           <div className="candidate-screening-meta">
             <h1>{screening.role}</h1>
             <p>{screening.candidate}</p>
-            <span>{screening.status} - {screening.currentQuestionIndex} of {screening.totalQuestions} answered</span>
+            <span>{screening.status}</span>
+            <div className="screening-progress-card">
+              <strong>Question {Math.min(screening.currentQuestionIndex + 1, screening.totalQuestions)} of {screening.totalQuestions}</strong>
+              <span>{screening.currentQuestionIndex} answered, {Math.max(0, screening.totalQuestions - screening.currentQuestionIndex)} remaining</span>
+              <div className="screening-progress-track">
+                <span style={{ width: `${screening.totalQuestions ? (screening.currentQuestionIndex / screening.totalQuestions) * 100 : 0}%` }} />
+              </div>
+            </div>
           </div>
         )}
 
         <div className="screening-chat public">
-          {(screening?.messages || []).map((message) => (
-            <div
-              className={message.sender === 'ai' ? 'screening-message ai' : 'screening-message candidate'}
-              key={message.id}
-            >
-              <span>{message.sender === 'ai' ? 'AI question' : message.mode === 'voice' ? 'Your voice answer' : 'Your answer'}</span>
-              <p>{message.text}</p>
-              <small>{message.createdAt}</small>
-            </div>
-          ))}
+          {(screening?.messages || []).map((message, index, messages) => {
+            const questionNumber = questionNumberForMessage(messages, index)
+            return (
+              <div
+                className={message.sender === 'ai' ? 'screening-message ai' : 'screening-message candidate'}
+                key={message.id}
+              >
+                <span>
+                  {message.sender === 'ai'
+                    ? `Question ${questionNumber} of ${screening.totalQuestions}`
+                    : message.mode === 'voice' ? 'Your voice answer' : 'Your answer'}
+                </span>
+                <p>{message.text}</p>
+                <small>{message.createdAt}</small>
+              </div>
+            )
+          })}
+          <div ref={chatEndRef} />
         </div>
 
         {screening?.status !== 'Completed' && screening && (
           <form className="candidate-answer-form" onSubmit={submitAnswer}>
-            <textarea
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              placeholder="Type your answer here"
-            />
+            <label>
+              <span>Answer question {Math.min(screening.currentQuestionIndex + 1, screening.totalQuestions)} of {screening.totalQuestions}</span>
+              <textarea
+                ref={answerRef}
+                value={answer}
+                onChange={(event) => setAnswer(event.target.value)}
+                placeholder="Type your answer here"
+              />
+            </label>
             <div className="row-actions">
               <button type="submit">Submit answer</button>
               <button type="button" onClick={captureVoiceAnswer}>

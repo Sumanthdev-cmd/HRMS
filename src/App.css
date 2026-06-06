@@ -105,9 +105,49 @@
   color: #667985;
 }
 
+.screening-progress-card {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #cfe4ed;
+  border-radius: 8px;
+  background: #edf8fc;
+}
+
+.screening-progress-card strong {
+  color: #17212b;
+  font-size: 16px;
+}
+
+.screening-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #d7e9f0;
+}
+
+.screening-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #146c94;
+}
+
 .candidate-answer-form {
   display: grid;
   gap: 10px;
+}
+
+.candidate-answer-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.candidate-answer-form label span {
+  color: #17465a;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .candidate-answer-form textarea {
