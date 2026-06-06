@@ -1228,6 +1228,7 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
   })
   const [selectedEmployee, setSelectedEmployee] = useState(currentUser.name)
   const canPostAnnouncement = roleId === 'admin'
+  const canViewCompanyAnalytics = ['admin', 'manager', 'recruiter'].includes(roleId)
   const dashboards = data.dashboards || { employees: [], company: {} }
   const ownDashboard = dashboards.employees?.find((item) =>
     item.employee === currentUser.name ||
@@ -1246,7 +1247,7 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
   return (
     <section className="content-grid">
       <div className="metric-strip">
-        {(roleId === 'admin' ? data.metrics : personalDashboardMetrics(ownDashboard)).map((metric) => (
+        {(canViewCompanyAnalytics ? data.metrics : personalDashboardMetrics(ownDashboard)).map((metric) => (
           <Metric
             key={metric.id}
             icon={metricIcons[metric.id] || Gauge}
@@ -1257,43 +1258,46 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
         ))}
       </div>
 
-      {roleId !== 'admin' && ownDashboard && (
+      {ownDashboard && (
         <PersonalDashboard dashboard={ownDashboard} />
       )}
 
-      {roleId === 'admin' && (
-        <AdminActivityDashboard
+      {canViewCompanyAnalytics && (
+        <CompanyActivityDashboard
           dashboards={dashboards}
+          canViewIndividuals={roleId === 'admin'}
           selectedEmployee={selectedEmployee}
           onSelectEmployee={setSelectedEmployee}
           selectedDashboard={selectedDashboard}
         />
       )}
 
-      <Panel className="wide" title="Company performance analytics" action="Export" onAction={onExport}>
-        <div className="chart-note">
-          <span>Blue: company score trend</span>
-          <span>Orange: productivity trend</span>
-        </div>
-        <div className="chart-wrap">
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={data.performance}>
-              <defs>
-                <linearGradient id="score" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="#146c94" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#146c94" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" />
-              <YAxis domain={[60, 100]} />
-              <Tooltip />
-              <Area dataKey="score" stroke="#146c94" fill="url(#score)" strokeWidth={3} />
-              <Line dataKey="productivity" stroke="#c24f33" strokeWidth={3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </Panel>
+      {canViewCompanyAnalytics && (
+        <Panel className="wide" title="Company performance analytics" action="Export" onAction={onExport}>
+          <div className="chart-note">
+            <span>Blue: company score trend</span>
+            <span>Orange: productivity trend</span>
+          </div>
+          <div className="chart-wrap">
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={data.performance}>
+                <defs>
+                  <linearGradient id="score" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="5%" stopColor="#146c94" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#146c94" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" />
+                <YAxis domain={[60, 100]} />
+                <Tooltip />
+                <Area dataKey="score" stroke="#146c94" fill="url(#score)" strokeWidth={3} />
+                <Line dataKey="productivity" stroke="#c24f33" strokeWidth={3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Announcements">
         {canPostAnnouncement && (
@@ -1338,11 +1342,13 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
         </div>
       </Panel>
 
-      <Panel title="AI insights">
-        {data.insights.map((insight, index) => (
-          <InsightCard insight={insight} index={index} key={insight.id || insight.title || insight} />
-        ))}
-      </Panel>
+      {canViewCompanyAnalytics && data.insights.length > 0 && (
+        <Panel title="AI insights">
+          {data.insights.map((insight, index) => (
+            <InsightCard insight={insight} index={index} key={insight.id || insight.title || insight} />
+          ))}
+        </Panel>
+      )}
 
       {roleId === 'manager' && (
         <ManagerTasks data={data} currentUser={currentUser} onNavigate={onNavigate} />
@@ -1408,28 +1414,32 @@ function PersonalDashboard({ dashboard }) {
   )
 }
 
-function AdminActivityDashboard({ dashboards, selectedEmployee, onSelectEmployee, selectedDashboard }) {
+function CompanyActivityDashboard({ dashboards, canViewIndividuals, selectedEmployee, onSelectEmployee, selectedDashboard }) {
   const company = dashboards.company || {}
 
   return (
-    <Panel className="wide" title="Admin activity dashboards">
+    <Panel className="wide" title="Company activity analytics">
       <div className="activity-summary-grid">
         <Metric icon={UsersRound} label="Active employees" value={String(company.activeEmployees || 0)} detail="Company-wide status" />
         <Metric icon={ClipboardCheck} label="Company tasks" value={String(company.totalTasks || 0)} detail={`${company.completedTasks || 0} completed`} />
         <Metric icon={Gauge} label="Productivity" value={`${company.productivity?.average || 0}%`} detail="Company task average" />
         <Metric icon={CalendarCheck} label="Pending leaves" value={String(company.pendingLeaves || 0)} detail="Needs approval" />
       </div>
-      <label className="activity-selector">
-        <span>View individual dashboard</span>
-        <select value={selectedEmployee || ''} onChange={(event) => onSelectEmployee(event.target.value)}>
-          {(dashboards.employees || []).map((employee) => (
-            <option value={employee.employee} key={employee.employeeCode || employee.employee}>
-              {employee.employee} - {employee.department}
-            </option>
-          ))}
-        </select>
-      </label>
-      {selectedDashboard && <PersonalDashboard dashboard={selectedDashboard} />}
+      {canViewIndividuals && (
+        <>
+          <label className="activity-selector">
+            <span>View individual dashboard</span>
+            <select value={selectedEmployee || ''} onChange={(event) => onSelectEmployee(event.target.value)}>
+              {(dashboards.employees || []).map((employee) => (
+                <option value={employee.employee} key={employee.employeeCode || employee.employee}>
+                  {employee.employee} - {employee.department}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedDashboard && <PersonalDashboard dashboard={selectedDashboard} />}
+        </>
+      )}
     </Panel>
   )
 }
