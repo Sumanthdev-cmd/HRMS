@@ -433,6 +433,9 @@ function App() {
         body: JSON.stringify({
           ...leaveRequest,
           person: auth.user.name,
+          actorName: auth.user.name,
+          actorEmail: auth.user.email,
+          actorRole: role,
         }),
       })
       setData((current) => ({
@@ -448,6 +451,7 @@ function App() {
         body: JSON.stringify({
           status: statusValue,
           actorName: auth.user.name,
+          actorEmail: auth.user.email,
           actorRole: role,
         }),
       })
@@ -2251,6 +2255,26 @@ function Leave({ data, actions, runAction, currentUser, role }) {
     },
   }
   const allocatedLeaveDays = Number(allocation.casual || 0) + Number(allocation.sick || 0) + Number(allocation.earned || 0)
+  const visibleLeaveRequests = useMemo(() => {
+    if (role === 'admin') {
+      return data.leaveRequests
+    }
+
+    if (role === 'manager') {
+      const teamNames = new Set(
+        data.employees
+          .filter((employee) =>
+            employee.manager === currentUser.name ||
+            employee.managerEmail === currentUser.email ||
+            employee.name === currentUser.name,
+          )
+          .map((employee) => employee.name),
+      )
+      return data.leaveRequests.filter((request) => teamNames.has(request.person))
+    }
+
+    return data.leaveRequests.filter((request) => request.person === currentUser.name)
+  }, [currentUser.email, currentUser.name, data.employees, data.leaveRequests, role])
   const balances = useMemo(() => {
     return [
       { label: 'Casual', value: allocation.casual, max: allocatedLeaveDays || 1 },
@@ -2329,7 +2353,7 @@ function Leave({ data, actions, runAction, currentUser, role }) {
           <button type="submit">Create request</button>
         </form>
         <div className="request-list">
-          {data.leaveRequests.map((request) => (
+          {visibleLeaveRequests.map((request) => (
             <div className="request-row" key={request.id}>
               <div>
                 <strong>{request.person}</strong>
@@ -2381,6 +2405,7 @@ function Leave({ data, actions, runAction, currentUser, role }) {
               </div>
             </div>
           ))}
+          {visibleLeaveRequests.length === 0 && <p className="muted">No leave requests for this login yet.</p>}
         </div>
       </Panel>
 

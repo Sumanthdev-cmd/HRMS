@@ -2069,6 +2069,27 @@ function dashboardEmployeeSummary(employee) {
   }
 }
 
+function visibleLeaveRequestsFor(actorName, actorRole, actorEmail = '') {
+  if (actorRole === 'admin') {
+    return state.leaveRequests
+  }
+
+  if (actorRole === 'manager') {
+    const teamNames = new Set(
+      (state.employees || [])
+        .filter((employee) =>
+          employee.manager === actorName ||
+          employee.managerEmail === actorEmail ||
+          employee.name === actorName,
+        )
+        .map((employee) => employee.name),
+    )
+    return state.leaveRequests.filter((leave) => teamNames.has(leave.person))
+  }
+
+  return state.leaveRequests.filter((leave) => leave.person === actorName)
+}
+
 function activityDashboards() {
   const employeeDashboards = (state.employees || []).map(dashboardEmployeeSummary).filter(Boolean)
   return {
@@ -3288,7 +3309,12 @@ app.post('/api/leave', async (request, response) => {
   await syncLeaveRequestToSupabase(leave)
   await syncEmployeesToSupabase()
   state.notifications.unshift({ id: `n-${Date.now()}`, text: `${leave.person} submitted ${leave.type}.`, read: false })
-  response.status(201).json({ leave, leaveRequests: state.leaveRequests, employees: state.employees, notifications: state.notifications })
+  response.status(201).json({
+    leave,
+    leaveRequests: visibleLeaveRequestsFor(leave.person, request.body.actorRole || 'employee', request.body.actorEmail || ''),
+    employees: state.employees,
+    notifications: state.notifications,
+  })
 })
 
 app.patch('/api/leave/:id', async (request, response) => {
@@ -3319,7 +3345,12 @@ app.patch('/api/leave/:id', async (request, response) => {
     await syncLeaveRequestToSupabase(leave)
     await syncEmployeesToSupabase()
     state.notifications.unshift({ id: `n-${Date.now()}`, text: `${leave.person} withdrew a leave request.`, read: false })
-    response.json({ leave, leaveRequests: state.leaveRequests, employees: state.employees, notifications: state.notifications })
+    response.json({
+      leave,
+      leaveRequests: visibleLeaveRequestsFor(actorName, actorRole, request.body.actorEmail || ''),
+      employees: state.employees,
+      notifications: state.notifications,
+    })
     return
   }
 
@@ -3339,7 +3370,12 @@ app.patch('/api/leave/:id', async (request, response) => {
   await syncLeaveRequestToSupabase(leave)
   await syncEmployeesToSupabase()
   state.notifications.unshift({ id: `n-${Date.now()}`, text: `${actorName} ${nextStatus.toLowerCase()} ${leave.person}'s leave.`, read: false })
-  response.json({ leave, leaveRequests: state.leaveRequests, employees: state.employees, notifications: state.notifications })
+  response.json({
+    leave,
+    leaveRequests: visibleLeaveRequestsFor(actorName, actorRole, request.body.actorEmail || ''),
+    employees: state.employees,
+    notifications: state.notifications,
+  })
 })
 
 app.post('/api/payroll/generate', (request, response) => {
