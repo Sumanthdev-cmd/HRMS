@@ -260,7 +260,8 @@ function App() {
   const visibleNav = navItems.filter((item) => data.permissions[role].includes(item.id))
   const activeRole = data.roles.find((item) => item.id === role)
   const safeActiveTab = data.permissions[role].includes(activeTab) ? activeTab : visibleNav[0].id
-  const unread = data.notifications.filter((notification) => !notification.read).length
+  const visibleNotifications = visibleNotificationsForRole(data.notifications, role)
+  const unread = visibleNotifications.filter((notification) => !notification.read).length
   const searchFilteredEmployees = filterItems(data.employees, searchTerm, ['name', 'role', 'department', 'manager'])
   const filteredEmployees =
     departmentFilter === 'All'
@@ -274,7 +275,10 @@ function App() {
       setStatus('Dashboard export requested from backend.')
     },
     markNotificationsRead: async () => {
-      const result = await api('/api/notifications/read', { method: 'POST' })
+      const result = await api('/api/notifications/read', {
+        method: 'POST',
+        body: JSON.stringify({ ids: visibleNotifications.map((notification) => notification.id) }),
+      })
       setData((current) => ({ ...current, notifications: result.notifications }))
     },
     markNotificationRead: async (id) => {
@@ -745,7 +749,7 @@ function App() {
               </button>
               {notificationsOpen && (
                 <NotificationPanel
-                  notifications={data.notifications}
+                  notifications={visibleNotifications}
                   onReadOne={(id) =>
                     runAction(() => actions.markNotificationRead(id), 'Notification marked as read.')
                   }
@@ -1189,6 +1193,32 @@ function filterItems(items, term, keys) {
   return items.filter((item) =>
     keys.some((key) => String(item[key] || '').toLowerCase().includes(normalized)),
   )
+}
+
+function isRecruitmentNotification(notification) {
+  const text = String(notification.text || '').toLowerCase()
+  return (
+    notification.category === 'recruitment' ||
+    text.includes('candidate') ||
+    text.includes('shortlist') ||
+    text.includes('screening') ||
+    text.includes('interview') ||
+    text.includes('role listed')
+  )
+}
+
+function visibleNotificationsForRole(notifications, role) {
+  return notifications.filter((notification) => {
+    if (Array.isArray(notification.roles) && notification.roles.length) {
+      return notification.roles.includes(role)
+    }
+
+    if (isRecruitmentNotification(notification)) {
+      return ['admin', 'manager', 'recruiter'].includes(role)
+    }
+
+    return true
+  })
 }
 
 function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnouncement, runAction, currentUser, onNavigate }) {

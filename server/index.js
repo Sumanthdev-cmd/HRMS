@@ -746,7 +746,13 @@ const defaultState = {
   notifications: [
     { id: 'n-1', text: 'June payroll is ready for management approval.', read: false },
     { id: 'n-2', text: '2 leave requests need action.', read: false },
-    { id: 'n-3', text: 'Candidate Rhea Sharma has a new AI match score.', read: true },
+    {
+      id: 'n-3',
+      text: 'Candidate Rhea Sharma has a new AI match score.',
+      read: true,
+      category: 'recruitment',
+      roles: ['admin', 'manager', 'recruiter'],
+    },
   ],
   documents: [
     {
@@ -3024,6 +3030,8 @@ app.post('/api/jobs', async (request, response) => {
     id: `n-${Date.now()}`,
     text: `${job.title} role listed with ${skills.length} required skills.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
   response.status(201).json({ job, jobs: state.jobs, notifications: state.notifications })
 })
@@ -3559,6 +3567,8 @@ app.post('/api/recruitment/shortlist', async (request, response) => {
     id: `n-${Date.now()}`,
     text: `${shortlist.candidate} sent to shortlist. Final decision remains with HR.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
   response.status(201).json({ shortlist, shortlists: state.shortlists, notifications: state.notifications })
 })
@@ -3591,6 +3601,8 @@ app.post('/api/recruitment/shortlist/:id/notify', async (request, response) => {
     id: `n-${Date.now()}`,
     text: `${shortlist.candidate} notified at ${shortlist.email}.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
   response.json({ shortlist, shortlists: state.shortlists, notifications: state.notifications })
 })
@@ -3624,6 +3636,8 @@ app.post('/api/recruitment/shortlist/notify-all', async (_request, response) => 
     id: `n-${Date.now()}`,
     text: `${sentCount} shortlisted candidate${sentCount === 1 ? '' : 's'} notified by HR${failures.length ? `; ${failures.length} failed` : ''}.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
   response.json({ notifiedCount: sentCount, failures, shortlists: state.shortlists, notifications: state.notifications })
 })
@@ -3694,6 +3708,8 @@ app.post('/api/recruitment/shortlist/:id/video-interview', async (request, respo
     id: `n-${Date.now()}`,
     text: `${actorName} scheduled a video interview for ${shortlist.candidate}.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
 
   response.json({ shortlist, shortlists: state.shortlists, notifications: state.notifications })
@@ -3732,6 +3748,8 @@ app.post('/api/recruitment/shortlist/:id/screening/start', async (request, respo
     id: `n-${Date.now()}`,
     text: `AI screening invite sent to ${shortlist.candidate}.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
 
   response.status(201).json({ screening, shortlist, shortlists: state.shortlists, notifications: state.notifications })
@@ -3866,6 +3884,8 @@ app.post('/api/public/screening/:id/message', async (request, response) => {
       id: `n-${Date.now()}`,
       text: `${shortlist.candidate} completed AI screening for ${shortlist.bestRole || shortlist.jobTitle}.`,
       read: false,
+      category: 'recruitment',
+      roles: ['admin', 'manager', 'recruiter'],
     })
   }
 
@@ -3900,6 +3920,8 @@ app.patch('/api/recruitment/shortlist/:id/selection', async (request, response) 
     id: `n-${Date.now()}`,
     text: `${actorName} marked ${shortlist.candidate} as selected for ${shortlist.bestRole || shortlist.jobTitle}.`,
     read: false,
+    category: 'recruitment',
+    roles: ['admin', 'manager', 'recruiter'],
   })
 
   response.json({ shortlist, shortlists: state.shortlists, notifications: state.notifications })
@@ -3965,8 +3987,13 @@ app.post('/api/ai/voice', (request, response) => {
   })
 })
 
-app.post('/api/notifications/read', async (_request, response) => {
-  state.notifications = state.notifications.map((notification) => ({ ...notification, read: true }))
+app.post('/api/notifications/read', async (request, response) => {
+  const ids = Array.isArray(request.body?.ids) ? new Set(request.body.ids) : null
+  state.notifications = state.notifications.map((notification) => (
+    !ids || ids.has(notification.id)
+      ? { ...notification, read: true }
+      : notification
+  ))
   await syncNotificationsToSupabase()
   response.json({ notifications: state.notifications })
 })
