@@ -16,7 +16,7 @@ import { PDFParse } from 'pdf-parse'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const upload = multer({ storage: multer.memoryStorage() })
-const port = 4000
+const port = Number(process.env.PORT || 4000)
 const usersPath = join(__dirname, 'data', 'users.json')
 const analyticsSeedPath = join(__dirname, 'data', 'analytics-seed.csv')
 const clientDistPath = join(__dirname, '..', 'dist')
@@ -617,6 +617,27 @@ function findShortlistByScreeningInvite(request, response) {
   return shortlist
 }
 
+function createTaskSeed(id, title, assignedTo, assignedBy, department, priority, status, dueDate, completedAt, estimatedHours, actualHours, qualityScore) {
+  return {
+    id,
+    title,
+    description: 'Manager-assigned work item used for productivity calculation.',
+    assignedTo,
+    assignedBy,
+    department,
+    priority,
+    status,
+    dueDate,
+    completedAt,
+    estimatedHours,
+    actualHours,
+    qualityScore,
+    createdAt: '01/06/2026, 10:00 am',
+    reviewedBy: qualityScore ? assignedBy : '',
+    reviewedAt: qualityScore ? '05/06/2026, 05:30 pm' : '',
+  }
+}
+
 const defaultState = {
   roles: [
     {
@@ -641,10 +662,10 @@ const defaultState = {
     },
   ],
   permissions: {
-    admin: ['dashboard', 'people', 'attendance', 'leave', 'payroll', 'recruitment', 'salary', 'teamup', 'ai'],
-    manager: ['dashboard', 'people', 'attendance', 'leave', 'salary', 'teamup', 'ai'],
-    recruiter: ['dashboard', 'people', 'leave', 'recruitment', 'salary', 'teamup', 'ai'],
-    employee: ['dashboard', 'attendance', 'leave', 'payroll', 'salary', 'teamup', 'ai'],
+    admin: ['dashboard', 'people', 'tasks', 'attendance', 'leave', 'payroll', 'recruitment', 'salary', 'teamup', 'ai'],
+    manager: ['dashboard', 'people', 'tasks', 'attendance', 'leave', 'salary', 'teamup', 'ai'],
+    recruiter: ['dashboard', 'people', 'tasks', 'leave', 'recruitment', 'salary', 'teamup', 'ai'],
+    employee: ['dashboard', 'tasks', 'attendance', 'leave', 'payroll', 'salary', 'teamup', 'ai'],
   },
   employees: [
     createEmployee('Aarav Mehta', 'Senior Frontend Engineer', 'Product', 'Nisha Rao', 96, 8, 186000, 92),
@@ -677,6 +698,12 @@ const defaultState = {
     { id: 'leave-1', person: 'Sara Khan', type: 'Casual leave', dates: 'Jun 12-13', status: 'Pending', approver: null },
     { id: 'leave-2', person: 'Kabir Singh', type: 'Medical leave', dates: 'Jun 3-5', status: 'Approved', approver: 'Nisha Rao' },
     { id: 'leave-3', person: 'Aarav Mehta', type: 'Work from home', dates: 'Jun 7', status: 'Pending', approver: null },
+  ],
+  tasks: [
+    createTaskSeed('task-1', 'Build leave approval dashboard polish', 'Aarav Mehta', 'Nisha Rao', 'Product', 'High', 'Completed', '2026-06-04', '2026-06-03', 8, 7, 92),
+    createTaskSeed('task-2', 'Publish hybrid attendance policy tracker', 'Priya Nair', 'Management Admin', 'HR', 'Medium', 'Completed', '2026-06-05', '2026-06-05', 5, 6, 88),
+    createTaskSeed('task-3', 'Prepare revenue attendance risk report', 'Kabir Singh', 'Nisha Rao', 'Revenue', 'High', 'Delayed', '2026-06-04', '', 6, 0, 0),
+    createTaskSeed('task-4', 'Create analytics productivity summary', 'Sara Khan', 'Dev Arora', 'Analytics', 'Medium', 'In progress', '2026-06-07', '', 7, 0, 0),
   ],
   jobs: [
     {
@@ -800,7 +827,14 @@ function mergeWithDefaultState(data) {
   merged.permissions.recruiter = Array.from(new Set([
     ...merged.permissions.recruiter,
     'leave',
+    'tasks',
   ]))
+  for (const role of ['admin', 'manager', 'employee']) {
+    merged.permissions[role] = Array.from(new Set([
+      ...(merged.permissions[role] || []),
+      'tasks',
+    ]))
+  }
   merged.managerProfiles = data?.managerProfiles || []
   merged.employees = (merged.employees || []).map((employee) => ({
     ...employee,
@@ -813,8 +847,31 @@ function mergeWithDefaultState(data) {
       },
     },
   }))
+  merged.tasks = (merged.tasks || []).map(normalizeTask)
 
   return merged
+}
+
+function normalizeTask(task) {
+  return {
+    id: task.id || `task-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: String(task.title || 'Untitled task').trim(),
+    description: String(task.description || '').trim(),
+    assignedTo: String(task.assignedTo || '').trim(),
+    assignedBy: String(task.assignedBy || '').trim(),
+    department: String(task.department || 'General').trim(),
+    priority: ['Low', 'Medium', 'High', 'Critical'].includes(task.priority) ? task.priority : 'Medium',
+    status: ['Pending', 'In progress', 'Completed', 'Delayed', 'Blocked', 'Cancelled'].includes(task.status) ? task.status : 'Pending',
+    dueDate: task.dueDate || '',
+    completedAt: task.completedAt || '',
+    estimatedHours: Math.max(0, Number(task.estimatedHours || 0)),
+    actualHours: Math.max(0, Number(task.actualHours || 0)),
+    qualityScore: Math.min(100, Math.max(0, Number(task.qualityScore || 0))),
+    createdAt: task.createdAt || formatAppDateTime(),
+    reviewedBy: task.reviewedBy || '',
+    reviewedAt: task.reviewedAt || '',
+    productivityScore: Math.min(100, Math.max(0, Number(task.productivityScore || 0))),
+  }
 }
 
 function normalizeEmployeeManagerProfiles() {
@@ -1060,6 +1117,8 @@ function moduleRecordCollections(snapshot) {
     ['managerProfiles', snapshot.managerProfiles],
     ['attendance', snapshot.attendance],
     ['performance', snapshot.performance],
+    ['productivity', productivitySummary().employees],
+    ['tasks', snapshot.tasks],
     ['payroll', snapshot.payroll],
     ['salarySlips', snapshot.salarySlips],
     ['payrollApprovals', snapshot.payrollApprovals],
@@ -1756,6 +1815,50 @@ async function syncSalarySlipsToSupabase() {
   }
 }
 
+async function syncTaskToSupabase(task) {
+  if (!supabaseAdmin) {
+    return
+  }
+
+  const employee = state.employees.find((item) => item.name === task.assignedTo)
+  const taskProductivity = productivityForTasks([task], employee?.attendance || 0)
+  task.productivityScore = taskProductivity.score
+
+  const { error } = await supabaseAdmin
+    .from('employee_tasks')
+    .upsert({
+      app_record_id: task.id,
+      employee_code: employee?.employeeCode || '',
+      assigned_to: task.assignedTo,
+      assigned_by: task.assignedBy,
+      department: task.department,
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority,
+      status: task.status,
+      due_date: task.dueDate || null,
+      completed_at: task.completedAt || null,
+      estimated_hours: task.estimatedHours || 0,
+      actual_hours: task.actualHours || 0,
+      quality_score: task.qualityScore || 0,
+      productivity_score: task.productivityScore || 0,
+      payload: task,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'app_record_id' })
+
+  if (error) {
+    console.warn(`[storage] Could not sync task ${task.id} to Supabase employee_tasks table: ${error.message}`)
+  }
+}
+
+async function syncTasksToSupabase() {
+  if (!supabaseAdmin) {
+    return
+  }
+
+  await Promise.all((state.tasks || []).map((task) => syncTaskToSupabase(task)))
+}
+
 function createPerformanceDetails(score, status) {
   if (status === 'New hire' || score === 0) {
     return {
@@ -1821,6 +1924,87 @@ function calculateSalaryStructure(annualCtc, cabChargesMonthly = 0) {
 
 function formatMoney(value) {
   return `Rs. ${Number(value).toLocaleString('en-IN')}`
+}
+
+function taskCompletionRate(tasks) {
+  if (!tasks.length) {
+    return 0
+  }
+
+  return Math.round((tasks.filter((task) => task.status === 'Completed').length / tasks.length) * 100)
+}
+
+function onTimeCompletionRate(tasks) {
+  const completedTasks = tasks.filter((task) => task.status === 'Completed')
+  if (!completedTasks.length) {
+    return 0
+  }
+
+  const onTime = completedTasks.filter((task) =>
+    task.completedAt && task.dueDate && new Date(task.completedAt) <= new Date(task.dueDate),
+  )
+  return Math.round((onTime.length / completedTasks.length) * 100)
+}
+
+function averageQualityScore(tasks) {
+  const reviewedTasks = tasks.filter((task) => Number(task.qualityScore || 0) > 0)
+  if (!reviewedTasks.length) {
+    return 0
+  }
+
+  return Math.round(reviewedTasks.reduce((sum, task) => sum + Number(task.qualityScore || 0), 0) / reviewedTasks.length)
+}
+
+function productivityForTasks(tasks, attendanceScore = 0) {
+  const completion = taskCompletionRate(tasks)
+  const onTime = onTimeCompletionRate(tasks)
+  const quality = averageQualityScore(tasks)
+  const attendance = Math.min(100, Math.max(0, Number(attendanceScore || 0)))
+
+  return {
+    completion,
+    onTime,
+    quality,
+    attendance,
+    score: Math.round((completion * 0.4) + (onTime * 0.25) + (quality * 0.25) + (attendance * 0.1)),
+  }
+}
+
+function employeeProductivity(employee) {
+  const employeeTasks = (state.tasks || []).filter((task) => task.assignedTo === employee.name)
+  return {
+    employee: employee.name,
+    employeeCode: employee.employeeCode,
+    department: employee.department,
+    taskCount: employeeTasks.length,
+    ...productivityForTasks(employeeTasks, employee.attendance),
+  }
+}
+
+function productivitySummary() {
+  const employees = (state.employees || []).map(employeeProductivity)
+  const activeEmployees = employees.filter((item) => item.taskCount > 0)
+  const average = activeEmployees.length
+    ? Math.round(activeEmployees.reduce((sum, item) => sum + item.score, 0) / activeEmployees.length)
+    : 0
+
+  return {
+    average,
+    employees,
+    formula: '40% task completion + 25% on-time delivery + 25% manager quality score + 10% attendance consistency',
+  }
+}
+
+function companyPerformanceTrend() {
+  const productivity = productivitySummary().average
+  const basePerformance = state.performance?.length ? state.performance : []
+
+  return basePerformance.map((item, index) => ({
+    ...item,
+    productivity: index === basePerformance.length - 1
+      ? productivity
+      : Number(item.productivity || 0),
+  }))
 }
 
 function dashboardMetrics() {
@@ -2144,7 +2328,8 @@ function getBootstrap() {
     employees: state.employees,
     managerProfiles: state.managerProfiles || [],
     attendance: state.attendance,
-    performance: state.performance,
+    performance: companyPerformanceTrend(),
+    productivity: productivitySummary(),
     payroll: state.payroll,
     salarySlips: state.salarySlips,
     payrollApprovals: state.payrollApprovals,
@@ -2157,6 +2342,7 @@ function getBootstrap() {
     announcements: state.announcements,
     insights: state.insights,
     shortlists: state.shortlists,
+    tasks: state.tasks || [],
     teams: state.teams,
     voiceListening: state.voiceListening,
     metrics: dashboardMetrics(),
@@ -2860,6 +3046,146 @@ app.post('/api/teams/:id/messages', upload.single('attachment'), (request, respo
   }
   team.messages.push(message)
   response.status(201).json({ message, team, teams: state.teams })
+})
+
+app.post('/api/tasks', async (request, response) => {
+  const actorRole = request.body.actorRole || 'employee'
+  if (!['admin', 'manager'].includes(actorRole)) {
+    response.status(403).json({ error: 'Only managers or management admins can assign tasks' })
+    return
+  }
+
+  const assignedTo = String(request.body.assignedTo || '').trim()
+  const employee = state.employees.find((item) => item.name === assignedTo)
+  if (!employee) {
+    response.status(400).json({ error: 'Select a valid employee for the task' })
+    return
+  }
+
+  if (actorRole === 'manager') {
+    const actorName = request.body.actorName || ''
+    const actorEmail = request.body.actorEmail || ''
+    const managesEmployee =
+      employee.manager === actorName ||
+      employee.managerEmail === actorEmail ||
+      !employee.managerEmail
+
+    if (!managesEmployee) {
+      response.status(403).json({ error: 'Managers can assign tasks only to their reporting employees' })
+      return
+    }
+  }
+
+  const task = normalizeTask({
+    id: `task-${Date.now()}`,
+    title: request.body.title,
+    description: request.body.description,
+    assignedTo,
+    assignedBy: request.body.actorName || 'Manager',
+    department: employee.department,
+    priority: request.body.priority,
+    status: 'Pending',
+    dueDate: request.body.dueDate,
+    estimatedHours: request.body.estimatedHours,
+    createdAt: formatAppDateTime(),
+  })
+
+  state.tasks.unshift(task)
+  await syncTaskToSupabase(task)
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    text: `${task.assignedBy} assigned ${task.title} to ${task.assignedTo}.`,
+    read: false,
+  })
+
+  response.status(201).json({
+    task,
+    tasks: state.tasks,
+    productivity: productivitySummary(),
+    performance: companyPerformanceTrend(),
+    notifications: state.notifications,
+  })
+})
+
+app.patch('/api/tasks/:id', async (request, response) => {
+  const task = state.tasks.find((item) => item.id === request.params.id)
+  if (!task) {
+    response.status(404).json({ error: 'Task not found' })
+    return
+  }
+
+  const actorRole = request.body.actorRole || 'employee'
+  const actorName = request.body.actorName || ''
+  const isAssignee = task.assignedTo === actorName
+  const isManager = ['admin', 'manager'].includes(actorRole)
+  if (!isAssignee && !isManager) {
+    response.status(403).json({ error: 'Only the assignee, manager, or admin can update this task' })
+    return
+  }
+
+  const allowedStatuses = ['Pending', 'In progress', 'Completed', 'Delayed', 'Blocked', 'Cancelled']
+  if (allowedStatuses.includes(request.body.status)) {
+    task.status = request.body.status
+  }
+
+  if (request.body.actualHours !== undefined) {
+    task.actualHours = Math.max(0, Number(request.body.actualHours || 0))
+  }
+
+  if (request.body.status === 'Completed' && !task.completedAt) {
+    task.completedAt = new Date().toISOString().slice(0, 10)
+  }
+
+  if (request.body.status && request.body.status !== 'Completed') {
+    task.completedAt = ''
+  }
+
+  await syncTaskToSupabase(task)
+  response.json({
+    task,
+    tasks: state.tasks,
+    productivity: productivitySummary(),
+    performance: companyPerformanceTrend(),
+    notifications: state.notifications,
+  })
+})
+
+app.patch('/api/tasks/:id/review', async (request, response) => {
+  const task = state.tasks.find((item) => item.id === request.params.id)
+  if (!task) {
+    response.status(404).json({ error: 'Task not found' })
+    return
+  }
+
+  const actorRole = request.body.actorRole || 'employee'
+  if (!['admin', 'manager'].includes(actorRole)) {
+    response.status(403).json({ error: 'Only managers or management admins can review task quality' })
+    return
+  }
+
+  if (task.status !== 'Completed') {
+    response.status(409).json({ error: 'Only completed tasks can receive a quality review' })
+    return
+  }
+
+  task.qualityScore = Math.min(100, Math.max(0, Number(request.body.qualityScore || 0)))
+  task.reviewedBy = request.body.actorName || 'Manager'
+  task.reviewedAt = formatAppDateTime()
+  await syncTaskToSupabase(task)
+
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    text: `${task.reviewedBy} reviewed task quality for ${task.assignedTo}.`,
+    read: false,
+  })
+
+  response.json({
+    task,
+    tasks: state.tasks,
+    productivity: productivitySummary(),
+    performance: companyPerformanceTrend(),
+    notifications: state.notifications,
+  })
 })
 
 app.post('/api/attendance/sync', (_request, response) => {
@@ -3598,6 +3924,7 @@ await syncAnnouncementsToSupabase()
 await syncNotificationsToSupabase()
 await syncJobsToSupabase()
 await syncSalarySlipsToSupabase()
+await syncTasksToSupabase()
 await syncModuleRecordsToSupabase(cloneData(state))
 
 const server = app.listen(port, () => {

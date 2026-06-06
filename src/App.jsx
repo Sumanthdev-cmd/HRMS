@@ -44,6 +44,7 @@ import './App.css'
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'people', label: 'Employees', icon: UsersRound },
+  { id: 'tasks', label: 'Tasks', icon: ClipboardCheck },
   { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
   { id: 'leave', label: 'Leave', icon: ClipboardCheck },
   { id: 'payroll', label: 'Payroll', icon: WalletCards },
@@ -488,6 +489,58 @@ function App() {
         notifications: result.notifications,
       }))
     },
+    assignTask: async (task) => {
+      const result = await api('/api/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...task,
+          actorName: auth.user.name,
+          actorEmail: auth.user.email,
+          actorRole: role,
+        }),
+      })
+      setData((current) => ({
+        ...current,
+        tasks: result.tasks,
+        productivity: result.productivity,
+        performance: result.performance,
+        notifications: result.notifications,
+      }))
+    },
+    updateTask: async (id, taskUpdate) => {
+      const result = await api(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...taskUpdate,
+          actorName: auth.user.name,
+          actorRole: role,
+        }),
+      })
+      setData((current) => ({
+        ...current,
+        tasks: result.tasks,
+        productivity: result.productivity,
+        performance: result.performance,
+        notifications: result.notifications,
+      }))
+    },
+    reviewTask: async (id, review) => {
+      const result = await api(`/api/tasks/${id}/review`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...review,
+          actorName: auth.user.name,
+          actorRole: role,
+        }),
+      })
+      setData((current) => ({
+        ...current,
+        tasks: result.tasks,
+        productivity: result.productivity,
+        performance: result.performance,
+        notifications: result.notifications,
+      }))
+    },
     parseResumes: async (files) => {
       const formData = new FormData()
       files.forEach((file) => {
@@ -798,6 +851,15 @@ function App() {
         {safeActiveTab === 'attendance' && (
           <Attendance data={data} onSync={actions.syncAttendance} runAction={runAction} />
         )}
+        {safeActiveTab === 'tasks' && (
+          <Tasks
+            data={data}
+            currentUser={auth.user}
+            role={role}
+            actions={actions}
+            runAction={runAction}
+          />
+        )}
         {safeActiveTab === 'leave' && (
           <Leave data={data} actions={actions} runAction={runAction} currentUser={auth.user} role={role} />
         )}
@@ -848,6 +910,7 @@ function pageTitle(tab) {
   const labels = {
     dashboard: 'Company Dashboard',
     people: 'Employee Profiles',
+    tasks: 'Task Productivity',
     attendance: 'Attendance Intelligence',
     leave: 'Leave Approvals',
     payroll: 'Payroll & Salary Slips',
@@ -1800,6 +1863,211 @@ function statusPillClass(status) {
     return 'pill neutral'
   }
   return 'pill pending'
+}
+
+function Tasks({ data, currentUser, role, actions, runAction }) {
+  const canAssignTasks = ['admin', 'manager'].includes(role)
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    assignedTo: data.employees[0]?.name || '',
+    priority: 'Medium',
+    dueDate: '',
+    estimatedHours: '',
+    description: '',
+  })
+  const [taskUpdates, setTaskUpdates] = useState({})
+  const [qualityScores, setQualityScores] = useState({})
+  const managedEmployees = data.employees.filter((employee) =>
+    role === 'admin' ||
+    employee.manager === currentUser.name ||
+    employee.managerEmail === currentUser.email ||
+    employee.name === currentUser.name,
+  )
+  const visibleTasks = (data.tasks || []).filter((task) =>
+    role === 'admin' ||
+    task.assignedTo === currentUser.name ||
+    task.assignedBy === currentUser.name ||
+    managedEmployees.some((employee) => employee.name === task.assignedTo),
+  )
+  const productivity = data.productivity || { average: 0, employees: [], formula: '' }
+
+  function updateTaskForm(field, value) {
+    setTaskForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function taskDraft(id) {
+    return taskUpdates[id] || {}
+  }
+
+  function updateTaskDraft(id, field, value) {
+    setTaskUpdates((current) => ({
+      ...current,
+      [id]: {
+        ...(current[id] || {}),
+        [field]: value,
+      },
+    }))
+  }
+
+  function submitTask(event) {
+    event.preventDefault()
+    runAction(async () => {
+      await actions.assignTask(taskForm)
+      setTaskForm({
+        title: '',
+        assignedTo: managedEmployees[0]?.name || data.employees[0]?.name || '',
+        priority: 'Medium',
+        dueDate: '',
+        estimatedHours: '',
+        description: '',
+      })
+    }, 'Task assigned and productivity will recalculate automatically.')
+  }
+
+  return (
+    <section className="content-grid">
+      <div className="metric-strip">
+        <Metric icon={Gauge} label="Productivity" value={`${productivity.average || 0}%`} detail="Calculated from employee tasks" />
+        <Metric icon={ClipboardCheck} label="Tracked tasks" value={String((data.tasks || []).length)} detail="Supabase-backed task records" />
+        <Metric icon={Check} label="Completed" value={String((data.tasks || []).filter((task) => task.status === 'Completed').length)} detail="Used in completion score" />
+        <Metric icon={CalendarCheck} label="On-time" value={`${productivity.employees?.length ? Math.round(productivity.employees.reduce((sum, item) => sum + item.onTime, 0) / productivity.employees.length) : 0}%`} detail="Completed before due date" />
+      </div>
+
+      <Panel className="wide" title="Task tracker">
+        {canAssignTasks && (
+          <form className="task-form" onSubmit={submitTask}>
+            <input
+              value={taskForm.title}
+              onChange={(event) => updateTaskForm('title', event.target.value)}
+              placeholder="Task title"
+              required
+            />
+            <select
+              value={taskForm.assignedTo}
+              onChange={(event) => updateTaskForm('assignedTo', event.target.value)}
+              required
+            >
+              <option value="">Assign employee</option>
+              {managedEmployees.map((employee) => (
+                <option value={employee.name} key={employee.id}>
+                  {employee.name} - {employee.department}
+                </option>
+              ))}
+            </select>
+            <select value={taskForm.priority} onChange={(event) => updateTaskForm('priority', event.target.value)}>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+            <input
+              type="date"
+              value={taskForm.dueDate}
+              onChange={(event) => updateTaskForm('dueDate', event.target.value)}
+              required
+            />
+            <input
+              type="number"
+              min="0"
+              value={taskForm.estimatedHours}
+              onChange={(event) => updateTaskForm('estimatedHours', event.target.value)}
+              placeholder="Estimated hours"
+            />
+            <input
+              value={taskForm.description}
+              onChange={(event) => updateTaskForm('description', event.target.value)}
+              placeholder="Task description"
+            />
+            <button type="submit">Assign task</button>
+          </form>
+        )}
+
+        <div className="task-list">
+          {visibleTasks.map((task) => (
+            <article className="task-card" key={task.id}>
+              <div>
+                <strong>{task.title}</strong>
+                <span>{task.assignedTo} - {task.department}</span>
+                <small>Assigned by {task.assignedBy} - Due {task.dueDate || 'Not set'} - Priority {task.priority}</small>
+                {task.description && <p>{task.description}</p>}
+                {task.reviewedBy && <small>Quality {task.qualityScore}/100 reviewed by {task.reviewedBy} on {task.reviewedAt}</small>}
+              </div>
+              <div className="task-actions">
+                <span className={task.status === 'Completed' ? 'pill good' : task.status === 'Blocked' || task.status === 'Delayed' ? 'pill danger' : 'pill pending'}>
+                  {task.status}
+                </span>
+                <select
+                  value={taskDraft(task.id).status || task.status}
+                  onChange={(event) => updateTaskDraft(task.id, 'status', event.target.value)}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="In progress">In progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Delayed">Delayed</option>
+                  <option value="Blocked">Blocked</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  value={taskDraft(task.id).actualHours ?? task.actualHours ?? ''}
+                  onChange={(event) => updateTaskDraft(task.id, 'actualHours', event.target.value)}
+                  placeholder="Actual hours"
+                />
+                <button
+                  type="button"
+                  onClick={() => runAction(
+                    () => actions.updateTask(task.id, taskDraft(task.id)),
+                    'Task updated and productivity recalculated.',
+                  )}
+                >
+                  Update
+                </button>
+                {canAssignTasks && task.status === 'Completed' && (
+                  <>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={qualityScores[task.id] ?? task.qualityScore ?? ''}
+                      onChange={(event) => setQualityScores((current) => ({ ...current, [task.id]: event.target.value }))}
+                      placeholder="Quality score"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => runAction(
+                        () => actions.reviewTask(task.id, { qualityScore: qualityScores[task.id] ?? task.qualityScore }),
+                        'Task quality reviewed and productivity recalculated.',
+                      )}
+                    >
+                      Review quality
+                    </button>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+          {visibleTasks.length === 0 && <p className="muted">No tasks are assigned for this login yet.</p>}
+        </div>
+      </Panel>
+
+      <Panel title="Productivity formula">
+        <p className="muted">{productivity.formula}</p>
+        <div className="stack-list">
+          {(productivity.employees || []).map((employee) => (
+            <div className="productivity-card" key={employee.employeeCode || employee.employee}>
+              <strong>{employee.employee}</strong>
+              <span>{employee.department} - {employee.taskCount} tasks - Final {employee.score}%</span>
+              <Progress label="Completion" value={employee.completion} max={100} />
+              <Progress label="On-time" value={employee.onTime} max={100} />
+              <Progress label="Quality" value={employee.quality} max={100} />
+              <Progress label="Attendance" value={employee.attendance} max={100} />
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </section>
+  )
 }
 
 function Attendance({ data, onSync, runAction }) {

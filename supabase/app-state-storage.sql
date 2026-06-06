@@ -24,6 +24,28 @@ create table if not exists public.hrms_analytics_records (
   primary key (company_id, category, record_key)
 );
 
+create table if not exists public.employee_tasks (
+  id uuid primary key default gen_random_uuid(),
+  app_record_id text unique not null,
+  employee_code text,
+  assigned_to text not null,
+  assigned_by text not null,
+  department text not null,
+  title text not null,
+  description text not null default '',
+  priority text not null default 'Medium',
+  status text not null default 'Pending',
+  due_date date,
+  completed_at date,
+  estimated_hours numeric(8, 2) not null default 0,
+  actual_hours numeric(8, 2) not null default 0,
+  quality_score numeric(5, 2) not null default 0,
+  productivity_score numeric(5, 2) not null default 0,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.leave_requests
   add column if not exists app_record_id text unique;
 
@@ -45,6 +67,7 @@ alter table public.salary_slips
 alter table public.hrms_app_state enable row level security;
 alter table public.hrms_module_records enable row level security;
 alter table public.hrms_analytics_records enable row level security;
+alter table public.employee_tasks enable row level security;
 
 create or replace function public.current_profile_role()
 returns text
@@ -94,3 +117,16 @@ create policy "admins_manage_hrms_analytics_records"
   to authenticated
   using (public.current_profile_role() = 'admin')
   with check (public.current_profile_role() = 'admin');
+
+drop policy if exists "authenticated_read_employee_tasks" on public.employee_tasks;
+create policy "authenticated_read_employee_tasks"
+  on public.employee_tasks for select
+  to authenticated
+  using (true);
+
+drop policy if exists "managers_admins_manage_employee_tasks" on public.employee_tasks;
+create policy "managers_admins_manage_employee_tasks"
+  on public.employee_tasks for all
+  to authenticated
+  using (public.current_profile_role() in ('admin', 'manager'))
+  with check (public.current_profile_role() in ('admin', 'manager'));

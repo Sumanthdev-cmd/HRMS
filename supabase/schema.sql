@@ -111,6 +111,28 @@ create table if not exists public.salary_slips (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.employee_tasks (
+  id uuid primary key default gen_random_uuid(),
+  app_record_id text unique not null,
+  employee_code text,
+  assigned_to text not null,
+  assigned_by text not null,
+  department text not null,
+  title text not null,
+  description text not null default '',
+  priority text not null default 'Medium',
+  status text not null default 'Pending',
+  due_date date,
+  completed_at date,
+  estimated_hours numeric(8, 2) not null default 0,
+  actual_hours numeric(8, 2) not null default 0,
+  quality_score numeric(5, 2) not null default 0,
+  productivity_score numeric(5, 2) not null default 0,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.shortlisted_candidates (
   id uuid primary key default gen_random_uuid(),
   app_record_id text unique,
@@ -155,6 +177,7 @@ alter table public.leave_requests enable row level security;
 alter table public.announcements enable row level security;
 alter table public.notifications enable row level security;
 alter table public.salary_slips enable row level security;
+alter table public.employee_tasks enable row level security;
 alter table public.shortlisted_candidates enable row level security;
 alter table public.team_groups enable row level security;
 alter table public.team_group_members enable row level security;
@@ -252,6 +275,17 @@ create policy "authenticated_read_employees"
   on public.employees for select
   to authenticated
   using (true);
+
+create policy "authenticated_read_employee_tasks"
+  on public.employee_tasks for select
+  to authenticated
+  using (true);
+
+create policy "managers_admins_manage_employee_tasks"
+  on public.employee_tasks for all
+  to authenticated
+  using (public.current_profile_role() in ('admin', 'manager'))
+  with check (public.current_profile_role() in ('admin', 'manager'));
 
 create policy "hr_admin_manage_employees"
   on public.employees for all

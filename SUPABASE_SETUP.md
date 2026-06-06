@@ -51,7 +51,7 @@ The backend also accepts `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PU
 This creates:
 
 - `profiles` for user role and display name.
-- `employees`, `jobs`, `leave_requests`, `announcements`, `notifications`, `salary_slips`, `shortlisted_candidates`, `team_groups`, and team message tables.
+- `employees`, `employee_tasks`, `jobs`, `leave_requests`, `announcements`, `notifications`, `salary_slips`, `shortlisted_candidates`, `team_groups`, and team message tables.
 - Row Level Security policies.
 - A trigger that creates a profile row when a new Supabase Auth user is added.
 
@@ -137,11 +137,13 @@ Recommended next migration order:
 
 ## 7. Store HRMS Data in Supabase
 
-The backend stores the current HRMS application data in the `public.hrms_app_state` table. This covers employees, attendance, leaves, payroll, recruitment, shortlists, announcements, notifications, documents, and team-up messages.
+The backend stores the current HRMS application data in the `public.hrms_app_state` table. This covers employees, tasks, attendance, leaves, payroll, recruitment, shortlists, announcements, notifications, documents, and team-up messages.
 
 The backend also mirrors every module into `public.hrms_module_records`, so you can query each module separately instead of opening the full JSON state.
 
 Dashboard analytics seed data lives in `server/data/analytics-seed.csv`. The backend seeds that CSV into `public.hrms_analytics_records` and then reads attendance, performance, payroll, and insight data from Supabase for the dashboard.
+
+Employee productivity tasks are mirrored into `public.employee_tasks`. Productivity is calculated from task completion, on-time delivery, manager quality score, and attendance consistency.
 
 If you already ran `supabase/schema.sql`, run only this migration in Supabase SQL Editor:
 
@@ -204,4 +206,10 @@ where module = 'leaveRequests';
 select category, record_key, data
 from public.hrms_analytics_records
 order by category, sort_order;
+```
+
+```sql
+select assigned_to, title, status, quality_score, productivity_score
+from public.employee_tasks
+order by updated_at desc;
 ```
