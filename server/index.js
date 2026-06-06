@@ -2031,6 +2031,59 @@ function dashboardMetrics() {
   ]
 }
 
+function dashboardEmployeeSummary(employee) {
+  if (!employee) {
+    return null
+  }
+
+  const tasks = (state.tasks || []).filter((task) => task.assignedTo === employee.name)
+  const pendingTasks = tasks.filter((task) => !['Completed', 'Cancelled'].includes(task.status))
+  const completedTasks = tasks.filter((task) => task.status === 'Completed')
+  const leaveRequests = (state.leaveRequests || []).filter((request) => request.person === employee.name)
+  const productivity = employeeProductivity(employee)
+
+  return {
+    employee: employee.name,
+    employeeCode: employee.employeeCode,
+    role: employee.role,
+    department: employee.department,
+    manager: employee.manager,
+    status: employee.status,
+    attendance: employee.attendance || 0,
+    leaveBalance: employee.leaves || 0,
+    performance: employee.performance || 0,
+    productivity,
+    tasks: {
+      total: tasks.length,
+      pending: pendingTasks.length,
+      completed: completedTasks.length,
+      blocked: tasks.filter((task) => task.status === 'Blocked' || task.status === 'Delayed').length,
+      recent: tasks.slice(0, 5),
+    },
+    leaves: {
+      total: leaveRequests.length,
+      pending: leaveRequests.filter((request) => request.status === 'Pending').length,
+      approved: leaveRequests.filter((request) => request.status === 'Approved').length,
+      recent: leaveRequests.slice(0, 5),
+    },
+  }
+}
+
+function activityDashboards() {
+  const employeeDashboards = (state.employees || []).map(dashboardEmployeeSummary).filter(Boolean)
+  return {
+    employees: employeeDashboards,
+    company: {
+      metrics: dashboardMetrics(),
+      productivity: productivitySummary(),
+      totalTasks: (state.tasks || []).length,
+      completedTasks: (state.tasks || []).filter((task) => task.status === 'Completed').length,
+      pendingLeaves: (state.leaveRequests || []).filter((request) => request.status === 'Pending').length,
+      activeEmployees: (state.employees || []).filter((employee) => employee.status === 'Active').length,
+    },
+  }
+}
+
 function normalizeSkillList(source) {
   return Array.isArray(source)
     ? source.map((skill) => String(skill).trim()).filter(Boolean)
@@ -2346,6 +2399,7 @@ function getBootstrap() {
     teams: state.teams,
     voiceListening: state.voiceListening,
     metrics: dashboardMetrics(),
+    dashboards: activityDashboards(),
   }
 }
 

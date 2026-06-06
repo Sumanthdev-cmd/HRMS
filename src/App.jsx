@@ -1192,7 +1192,14 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
     title: '',
     text: '',
   })
+  const [selectedEmployee, setSelectedEmployee] = useState(currentUser.name)
   const canPostAnnouncement = roleId === 'admin'
+  const dashboards = data.dashboards || { employees: [], company: {} }
+  const ownDashboard = dashboards.employees?.find((item) =>
+    item.employee === currentUser.name ||
+    data.employees.find((employee) => employee.name === item.employee)?.workEmail === currentUser.email,
+  )
+  const selectedDashboard = dashboards.employees?.find((item) => item.employee === selectedEmployee) || dashboards.employees?.[0]
 
   function submitAnnouncement(event) {
     event.preventDefault()
@@ -1205,7 +1212,7 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
   return (
     <section className="content-grid">
       <div className="metric-strip">
-        {data.metrics.map((metric) => (
+        {(roleId === 'admin' ? data.metrics : personalDashboardMetrics(ownDashboard)).map((metric) => (
           <Metric
             key={metric.id}
             icon={metricIcons[metric.id] || Gauge}
@@ -1215,6 +1222,19 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
           />
         ))}
       </div>
+
+      {roleId !== 'admin' && ownDashboard && (
+        <PersonalDashboard dashboard={ownDashboard} />
+      )}
+
+      {roleId === 'admin' && (
+        <AdminActivityDashboard
+          dashboards={dashboards}
+          selectedEmployee={selectedEmployee}
+          onSelectEmployee={setSelectedEmployee}
+          selectedDashboard={selectedDashboard}
+        />
+      )}
 
       <Panel className="wide" title="Company performance analytics" action="Export" onAction={onExport}>
         <div className="chart-note">
@@ -1294,6 +1314,89 @@ function Dashboard({ data, roleId, onExport, onPostAnnouncement, onDeleteAnnounc
         <ManagerTasks data={data} currentUser={currentUser} onNavigate={onNavigate} />
       )}
     </section>
+  )
+}
+
+function personalDashboardMetrics(dashboard) {
+  if (!dashboard) {
+    return [
+      { id: 'attendance', label: 'Attendance', value: '0%', detail: 'No employee profile linked' },
+      { id: 'tasks', label: 'Tasks', value: '0', detail: 'No assigned tasks' },
+      { id: 'performance', label: 'Productivity', value: '0%', detail: 'No task data yet' },
+      { id: 'leave', label: 'Leave balance', value: '0', detail: 'No leave profile linked' },
+    ]
+  }
+
+  return [
+    { id: 'attendance', label: 'Attendance', value: `${dashboard.attendance}%`, detail: dashboard.status },
+    { id: 'tasks', label: 'My tasks', value: String(dashboard.tasks.total), detail: `${dashboard.tasks.pending} pending` },
+    { id: 'performance', label: 'Productivity', value: `${dashboard.productivity.score}%`, detail: 'From task activity' },
+    { id: 'leave', label: 'Leave balance', value: String(dashboard.leaveBalance), detail: `${dashboard.leaves.pending} pending requests` },
+  ]
+}
+
+function PersonalDashboard({ dashboard }) {
+  return (
+    <Panel className="wide" title="My activity dashboard">
+      <div className="activity-summary-grid">
+        <InfoRow title="Profile" text={`${dashboard.employeeCode} - ${dashboard.role} - ${dashboard.department}`} />
+        <InfoRow title="Manager" text={dashboard.manager || 'Not assigned'} />
+        <InfoRow title="Performance" text={`${dashboard.performance || 0}/100 current review score`} />
+        <InfoRow title="Productivity formula" text={`${dashboard.productivity.score}% from completion, on-time delivery, quality, and attendance`} />
+      </div>
+      <div className="activity-columns">
+        <div>
+          <h3>Recent tasks</h3>
+          <div className="stack-list">
+            {dashboard.tasks.recent.length ? dashboard.tasks.recent.map((task) => (
+              <InfoRow
+                key={task.id}
+                title={task.title}
+                text={`${task.status} - Due ${task.dueDate || 'not set'} - Quality ${task.qualityScore || 0}/100`}
+              />
+            )) : <p className="muted">No tasks assigned yet.</p>}
+          </div>
+        </div>
+        <div>
+          <h3>Leave activity</h3>
+          <div className="stack-list">
+            {dashboard.leaves.recent.length ? dashboard.leaves.recent.map((leave) => (
+              <InfoRow
+                key={leave.id}
+                title={leave.type}
+                text={`${leave.dates} - ${leave.status}`}
+              />
+            )) : <p className="muted">No leave requests yet.</p>}
+          </div>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
+function AdminActivityDashboard({ dashboards, selectedEmployee, onSelectEmployee, selectedDashboard }) {
+  const company = dashboards.company || {}
+
+  return (
+    <Panel className="wide" title="Admin activity dashboards">
+      <div className="activity-summary-grid">
+        <Metric icon={UsersRound} label="Active employees" value={String(company.activeEmployees || 0)} detail="Company-wide status" />
+        <Metric icon={ClipboardCheck} label="Company tasks" value={String(company.totalTasks || 0)} detail={`${company.completedTasks || 0} completed`} />
+        <Metric icon={Gauge} label="Productivity" value={`${company.productivity?.average || 0}%`} detail="Company task average" />
+        <Metric icon={CalendarCheck} label="Pending leaves" value={String(company.pendingLeaves || 0)} detail="Needs approval" />
+      </div>
+      <label className="activity-selector">
+        <span>View individual dashboard</span>
+        <select value={selectedEmployee || ''} onChange={(event) => onSelectEmployee(event.target.value)}>
+          {(dashboards.employees || []).map((employee) => (
+            <option value={employee.employee} key={employee.employeeCode || employee.employee}>
+              {employee.employee} - {employee.department}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selectedDashboard && <PersonalDashboard dashboard={selectedDashboard} />}
+    </Panel>
   )
 }
 
